@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Simulateur Pompe à Chaleur — Savelys</title>
+  <meta name="description" content="Estimez en 2 minutes le passage à une pompe à chaleur air/eau : puissance, budget, aides (MaPrimeRénov', CEE) et amortissement. Estimation gratuite et sans engagement — Savelys." />
+  <meta name="theme-color" content="#0a7d5a" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="stylesheet" href="./styles/main.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar__brand">
+      <span class="logo" aria-hidden="true">♨︎</span>
+      <span>Savelys<small>Simulateur pompe à chaleur</small></span>
+    </div>
+    <p class="tagline">L'énergie est notre avenir, économisons-la&nbsp;!</p>
+  </header>
+
+  <main>
+    <h1 class="sr-only">Simulateur de pompe à chaleur Savelys</h1>
+    <div id="tunnel" class="tunnel"><!-- rendu par js/app.js --></div>
+  </main>
+
+  <section class="trustbar" aria-label="Repères de confiance Savelys">
+    <div><strong>150</strong> agences</div>
+    <div><strong>50 ans</strong> d'expertise</div>
+    <div><strong>3 000</strong> techniciens</div>
+  </section>
+
+  <footer class="footer">
+    <p class="disclaimer">
+      <strong>Estimation indicative et non contractuelle.</strong> Un diagnostic sur site par un
+      technicien Savelys est nécessaire pour le dimensionnement définitif et un chiffrage précis.
+      Montants d'aides sous réserve d'éligibilité (barèmes ANAH / CEE 2026, susceptibles d'évoluer).
+    </p>
+    <p class="footer__conditions">
+      Conditions aides : logement de plus de 15 ans, résidence principale, installation par un artisan
+      RGE (QualiPAC), PAC air/air non éligible au parcours par geste, TVA 5,5 %.
+      <a href="https://france-renov.gouv.fr" target="_blank" rel="noopener">France Rénov'</a>.
+    </p>
+  </footer>
+
+  <!-- Modale RGPD -->
+  <div id="rgpd-modal" class="modal" hidden>
+    <div class="modal__backdrop" data-close-rgpd></div>
+    <div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="rgpd-title">
+      <button type="button" class="modal__close" data-close-rgpd aria-label="Fermer">×</button>
+      <h2 id="rgpd-title">Protection de vos données (RGPD)</h2>
+      <ul>
+        <li><strong>Finalité</strong> : être recontacté(e) par Savelys pour votre projet de pompe à chaleur.</li>
+        <li><strong>Base légale</strong> : votre consentement.</li>
+        <li><strong>Destinataires</strong> : les équipes commerciales Savelys / l'agence concernée. Aucune revente.</li>
+        <li><strong>Conservation</strong> : le temps du traitement de votre demande, puis archivage légal.</li>
+        <li><strong>Vos droits</strong> : accès, rectification, suppression, opposition — sur simple demande.</li>
+      </ul>
+      <p>Consultez la <a href="https://www.savelys.fr" target="_blank" rel="noopener">politique de confidentialité</a>.</p>
+      <button type="button" class="btn btn--primary" data-close-rgpd>J'ai compris</button>
+    </div>
+  </div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

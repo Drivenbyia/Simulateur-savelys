@@ -1,0 +1,15 @@
+# Déploiement Netlify — site statique, aucun build (JS/CSS vanilla en ES modules).
+[build]
+  publish = "."
+  command = ""
+
+# Le service worker ne doit pas être mis en cache agressivement.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"

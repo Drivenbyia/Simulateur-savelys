@@ -1,0 +1,12 @@
+{
+  "name": "simulateur-pac-savelys",
+  "version": "0.1.0",
+  "description": "Simulateur public de passage à la pompe à chaleur air/eau — génération de leads Savelys (Engie Home Service).",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test",
+    "start": "npx --yes serve@14 . -l 8080"
+  },
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Savelys — pompe à chaleur">
+  <rect width="512" height="512" rx="96" fill="#0a7d5a"/>
+  <g fill="none" stroke="#ffffff" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+    <!-- unité PAC -->
+    <rect x="120" y="150" width="272" height="180" rx="24"/>
+    <circle cx="256" cy="240" r="58"/>
+    <!-- flux d'air / chaleur -->
+    <path d="M170 372c22 22 44 22 66 0s44-22 66 0 44 22 66 0"/>
+    <path d="M170 410c22 22 44 22 66 0s44-22 66 0 44 22 66 0" opacity="0.6"/>
+  </g>
+</svg>

@@ -7,7 +7,12 @@
  * Fourchette affichée = prix central ± 8 %.
  */
 
-import { PRIX_PAR_DEPERDITION, SUPPLEMENT_ECS, PRIX_FOURCHETTE } from "../constants.js";
+import {
+  PRIX_PAR_DEPERDITION,
+  SUPPLEMENT_ECS,
+  MAJORATION_POSE_IDF,
+  PRIX_FOURCHETTE,
+} from "../constants.js";
 
 /**
  * Interpolation linéaire par morceaux sur une table de points {depKw, prix}
@@ -32,12 +37,15 @@ export function interpolerPrix(depKw, points = PRIX_PAR_DEPERDITION) {
 }
 
 /**
- * @param {{ pDeperditionKW:number, avecEcs:boolean }} input
+ * @param {{ pDeperditionKW:number, avecEcs:boolean, idf?:boolean }} input
+ *   idf : logement en Île-de-France → majoration de pose (main-d'œuvre plus chère,
+ *   étude 2026 : facteur ≥ 1,35 sur la main-d'œuvre francilienne).
  * @returns {{ prixCentral:number, fourchette:[number,number] }}
  */
-export function estimerPrix({ pDeperditionKW, avecEcs }) {
+export function estimerPrix({ pDeperditionKW, avecEcs, idf = false }) {
   const base = interpolerPrix(pDeperditionKW, PRIX_PAR_DEPERDITION);
-  const prixCentral = base + (avecEcs ? SUPPLEMENT_ECS : 0);
+  const prixCentral =
+    base + (avecEcs ? SUPPLEMENT_ECS : 0) + (idf ? MAJORATION_POSE_IDF : 0);
 
   return {
     prixCentral,

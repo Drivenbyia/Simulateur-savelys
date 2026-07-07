@@ -46,10 +46,16 @@ js/ui/                   tunnel (navigation) · render (résultats) · lead (gat
 js/app.js                Orchestration
 ```
 
-Le **Moteur 1** reprend fidèlement la méthode « garde-fou » de PacCloser (pipeline DJU
-en 10 étapes : conso → ECS → correction PCS/PCI gaz → rendement chaudière → appoint
-bois → setback nocturne → puissance à la température de base). La **grille CEE** est
-la grille réelle Savelys (par zone × surface × profil).
+Le **Moteur 1** reprend fidèlement la méthode « garde-fou » de PacCloser (pipeline DJU :
+conso → ECS → correction PCS/PCI gaz → rendement chaudière → puissance à la température
+de base) ; sa voie « logement » utilise la méthode volumique de l'étude 2026
+(P = G × V × ΔT, coefficient G par période RT 1974 → RE 2020, glissé selon les travaux
+d'isolation pondérés ADEME). Le **Moteur 4** reprend la méthode « économies » de
+PacCloser : comparaison **tout compris** (énergie + abonnements + entretien 150/180 €/an),
+ECS au COP 2,5, surcoût d'abonnement élec (+80 €/an), projection 10 ans à deux scénarios
+avec inflation par énergie, provision de pannes selon l'âge et remplacement forcé de la
+chaudière à 20 ans, point de croisement, et scénario prudent fioul à 1,15 €/L.
+La **grille CEE** est la grille réelle Savelys (par zone × surface × profil).
 
 ## Captation du lead (RGPD)
 
@@ -65,22 +71,26 @@ lead complet) — un seul point à rebrancher : `envoyerLead()` dans `js/ui/lead
   1er janvier 2026 (brochure officielle « Les aides financières en 2026 »),
   IDF + hors-IDF (la table `hors_idf` couvre aussi l'Outre-mer).
 - **Zones climatiques / DJU** (`js/data/climate.js`, `js/data/postal-zones.js`) :
-  8 sous-zones RT2012 (H1a…H3) et mapping complet des 96 départements
-  métropolitains, d'après la table de dimensionnement PacCloser.
-- **Design system** (`styles/main.css`) : vert Savelys confirmé `#265B2F`
-  (source : savelys.fr).
+  8 sous-zones RT2012 (H1a…H3), mapping des 96 départements (PacCloser) et
+  **température de base par département** (étude 2026, valeurs 0–200 m).
+- **Tables énergie & économies** (`js/constants.js`) : prix/abonnements/inflations
+  par énergie, COP ECS, entretiens, vieillissement chaudière — méthode PacCloser.
+- **Design system** (`styles/main.css`) : vert Savelys confirmé `#265B2F`,
+  police Urbanist, logo officiel (sources : savelys.fr).
 
 ## ⚠️ Données à valider avant mise en production
 
-- **Constantes énergie** (`js/constants.js`, `MAJ_TARIFS`) : prix gaz/fioul/élec.
+- **Constantes énergie** (`js/constants.js`, `MAJ_TARIFS`) : les prix bougent
+  chaque mois — réactualiser prix gaz/fioul/élec avant diffusion.
 - **Barème CEE / Coup de pouce** (`js/data/aides-baremes.js`) : barème réel du
   partenaire obligé Savelys.
 - **Cible d'intégration du lead** (`js/ui/lead.js`) : Salesforce Web-to-Lead,
   à brancher quand l'`oid`/endpoint de l'org sera fourni.
 
-## Points ouverts
+## Limites connues (assumées pour un outil public)
 
-1. Mapping départemental fin RT2012 (source PacCloser).
-2. Vrais prix Savelys par puissance → calage des poids du Moteur 3.
-3. Destination technique du lead (agence / CRM).
-4. Hex + police Savelys.
+- **Altitude non corrigée** : les T_base départementales sont des valeurs 0–200 m ;
+  en altitude la déperdition réelle est plus élevée (−1 à −2 °C par 200 m, cf. étude
+  2026) — l'estimation est à affiner en visite technique.
+- **Appoint bois / setback nocturne** : gérés par PacCloser (outil conseiller),
+  volontairement non exposés dans le tunnel grand public.

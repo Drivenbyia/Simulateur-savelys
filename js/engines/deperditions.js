@@ -14,9 +14,10 @@
 
 import {
   PCI_FIOUL,
-  RATIOS_W_M2_RANGE,
+  G_RANGE,
   POIDS_ISOLATION,
   T_INT,
+  HAUTEUR_SOUS_PLAFOND_DEFAUT,
   rendementChaudiere,
   PCS_PCI_RATIO,
   CORRECTION_PCI_GAZ_DEFAUT,
@@ -24,12 +25,13 @@ import {
 } from "../constants.js";
 
 /**
- * Ratio de déperdition (W/m²) pour une époque, glissé dans sa fourchette [bas,haut]
- * selon les travaux d'isolation déclarés. Aucun travaux → haut (pire cas) ;
- * tous les postes → bas. `travaux` = { fenetres, murs, toiture_combles, plancher_bas }.
+ * Coefficient G (W/m³·K) pour une époque, glissé dans sa fourchette [bas,haut]
+ * selon les travaux d'isolation déclarés. Aucun travaux → haut (état d'origine) ;
+ * tous les postes → bas (rénové). `travaux` = { fenetres, murs, toiture_combles,
+ * plancher_bas }, chaque poste pesant son poids ADEME dans les déperditions.
  */
-export function ratioIsolation(epoqueKey, travaux = {}) {
-  const range = RATIOS_W_M2_RANGE[epoqueKey];
+export function coefG(epoqueKey, travaux = {}) {
+  const range = G_RANGE[epoqueKey];
   if (!range) return 0;
   const [bas, haut] = range;
   let part = 0;
@@ -113,12 +115,15 @@ export function deperditionsVoieA({
 }
 
 /**
- * Voie B — secours par ratio surface.
- * On dérive aussi un besoin de chauffage annuel (kWh utiles) à partir des DJU,
- * pour que le Moteur 4 (amortissement) dispose d'une énergie même sans facture.
+ * Voie B — par les caractéristiques du logement (méthode volumique, étude 2026) :
+ *   P (kW) = G(époque, travaux) × V × ΔT / 1000, avec V = surface × hauteur.
+ * Contrairement à un simple ratio W/m², la déperdition dépend donc bien du CLIMAT
+ * (ΔT régional). On dérive aussi un besoin de chauffage annuel (kWh utiles) via
+ * les DJU, pour que le Moteur 4 (amortissement) dispose d'une énergie sans facture.
  */
 export function deperditionsVoieB({
   surface,
+  hauteur = HAUTEUR_SOUS_PLAFOND_DEFAUT,
   epoqueKey,
   travaux = {},
   ecsUtileKwh = 0,
@@ -126,14 +131,15 @@ export function deperditionsVoieB({
   tExtBase,
   tInt = T_INT,
 }) {
-  const ratio = ratioIsolation(epoqueKey, travaux); // W/m², glissé selon les travaux
-  const pDeperditionKW = ((Number(surface) || 0) * ratio) / 1000;
-
+  const g = coefG(epoqueKey, travaux); // W/m³·K, glissé selon les travaux
+  const volume = (Number(surface) || 0) * (Number(hauteur) || HAUTEUR_SOUS_PLAFOND_DEFAUT);
   const deltaT = tInt - tExtBase;
-  // Inverse de la formule PacCloser : usefulHeat = P × DJU × 24 / ΔT.
-  const usefulHeatKwh = deltaT > 0 ? (pDeperditionKW * dju * 24) / deltaT : 0;
+  const pDeperditionKW = deltaT > 0 ? (g * volume * deltaT) / 1000 : 0;
 
-  return { pDeperditionKW, usefulHeatKwh, eEcsUtileKwh: ecsUtileKwh, ratio };
+  // Consommation annuelle théorique (étude 2026) : C = G × V × DJU × 24 / 1000.
+  const usefulHeatKwh = (g * volume * dju * 24) / 1000;
+
+  return { pDeperditionKW, usefulHeatKwh, eEcsUtileKwh: ecsUtileKwh, g, volume };
 }
 
 /** Niveau de cohérence du croisement A/B (seuils PacCloser). */

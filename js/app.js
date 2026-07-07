@@ -4,9 +4,16 @@
  * Aucun build : chargé en <script type="module"> par index.html.
  */
 
-import { rendementChaudiere, PCI_FIOUL, T_INT, E_ECS_UTILE } from "./constants.js";
+import {
+  rendementChaudiere,
+  PCI_FIOUL,
+  T_INT,
+  E_ECS_UTILE,
+  HAUTEUR_SOUS_PLAFOND_DEFAUT,
+  DEPTS_IDF,
+} from "./constants.js";
 import { getZone, CLIMAT_DEFAUT, zoneCoarse } from "./data/climate.js";
-import { getZoneFromPostal } from "./data/postal-zones.js";
+import { getZoneFromPostal, getTbaseFromPostal } from "./data/postal-zones.js";
 import { PROFIL_LABELS } from "./data/aides-baremes.js";
 import { calculerDeperditions } from "./engines/deperditions.js";
 import { dimensionnerPAC } from "./engines/dimensionnement.js";
@@ -31,8 +38,9 @@ const state = {
   logement: {
     type: "maison",
     surface: 100,
+    hauteur: HAUTEUR_SOUS_PLAFOND_DEFAUT,
     codePostal: "",
-    epoqueKey: "de_1975_2000",
+    epoqueKey: "de_1989_2000",
     travaux: { toiture_combles: false, murs: false, fenetres: false, plancher_bas: false },
   },
   chauffage: { energie: "gaz", typeChaudiereKey: "standard", conso: "" },
@@ -47,11 +55,14 @@ const TYPES_CHAUDIERE = [
   ["standard", "Standard", "10 à 20 ans"],
   ["ancienne", "Ancienne", "plus de 20 ans"],
 ];
+// Périodes de construction (matrice G de l'étude 2026, RT 1974 → RE 2020).
 const EPOQUES = [
-  ["avant_1975", "Avant 1975", "non isolé à l'origine"],
-  ["de_1975_2000", "1975 – 2000", "isolation partielle"],
-  ["rt2005", "2000 – 2012", "RT2005"],
-  ["rt2012", "Après 2012", "RT2012 et +"],
+  ["avant_1974", "Avant 1974", "aucune isolation d'origine"],
+  ["de_1974_1988", "1974 – 1988", "premières réglementations (RT 1974/1982)"],
+  ["de_1989_2000", "1989 – 2000", "RT 1988"],
+  ["de_2001_2012", "2001 – 2012", "RT 2000 / RT 2005"],
+  ["rt2012", "2013 – 2021", "RT 2012 / BBC"],
+  ["re2020", "Après 2022", "RE 2020"],
 ];
 const EMETTEURS = [
   ["plancher_BT", "Plancher chauffant", "basse température"],
@@ -73,6 +84,9 @@ const METHODES = [
 function compute() {
   const zoneCode = getZoneFromPostal(state.logement.codePostal);
   const zone = zoneCode ? getZone(zoneCode) : CLIMAT_DEFAUT;
+  // T_base départementale (plus fine que la sous-zone) quand disponible.
+  const tExtBase = getTbaseFromPostal(state.logement.codePostal) ?? zone.tExtBase;
+  const idf = DEPTS_IDF.has(String(state.logement.codePostal || "").slice(0, 2));
   const ecsUtileKwh = state.besoins.avecEcs ? E_ECS_UTILE(state.besoins.nbOccupants) : 0;
 
   // Voie de calcul selon la méthode choisie par l'utilisateur.
@@ -81,8 +95,9 @@ function compute() {
     typeChaudiereKey: state.chauffage.typeChaudiereKey,
     ecsUtileKwh,
     surface: state.logement.surface,
+    hauteur: state.logement.hauteur,
     dju: zone.dju,
-    tExtBase: zone.tExtBase,
+    tExtBase,
     tInt: T_INT,
   };
   if (state.estimation.methode === "conso") {
@@ -93,10 +108,14 @@ function compute() {
   }
   const dep = calculerDeperditions(depInput);
 
-  const dim = dimensionnerPAC(dep.pDeperditionKW);
+  const dim = dimensionnerPAC(dep.pDeperditionKW, {
+    avecEcs: state.besoins.avecEcs,
+    nbPersonnes: state.besoins.nbOccupants,
+  });
   const prix = estimerPrix({
     pDeperditionKW: dep.pDeperditionKW,
     avecEcs: state.besoins.avecEcs,
+    idf,
   });
 
   const aides = calculerAides({
@@ -123,6 +142,8 @@ function compute() {
     emetteurKey: state.besoins.emetteurKey,
     energieActuelle: state.chauffage.energie,
     consoReelle,
+    typeChaudiereKey: state.chauffage.typeChaudiereKey,
+    avecEcs: state.besoins.avecEcs,
     prixCentral: prix.prixCentral,
     aidesTotales: aides.aidesTotales,
   });
@@ -200,6 +221,11 @@ function stepLogement() {
     <label class="field">
       <span>Surface chauffée : <strong id="surface-val">${state.logement.surface} m²</strong></span>
       <input type="range" min="30" max="300" step="5" data-bind="logement.surface" data-type="number" data-live="#surface-val" data-unit=" m²" value="${state.logement.surface}" />
+    </label>
+
+    <label class="field">
+      <span>Hauteur sous plafond : <strong id="hauteur-val">${state.logement.hauteur} m</strong></span>
+      <input type="range" min="2.2" max="3.5" step="0.1" data-bind="logement.hauteur" data-type="number" data-live="#hauteur-val" data-unit=" m" value="${state.logement.hauteur}" />
     </label>
 
     <label class="field">

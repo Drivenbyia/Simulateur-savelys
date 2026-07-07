@@ -3,26 +3,71 @@
  *
  * ⚠️ RÈGLE : rien n'est codé en dur dans les formules des moteurs.
  * Tout paramètre susceptible de bouger est centralisé ici et DATÉ (MAJ_TARIFS).
- * Repères juillet 2026 — à réactualiser régulièrement.
+ * Sources : méthode économies PacCloser (tables §0) + étude de prix PAC 2026.
  */
 
 export const MAJ_TARIFS = "2026-07";
 
-/* --- Prix de l'énergie (€ TTC) --- */
-export const PRIX_GAZ_CHAUFFAGE = 0.128; // €/kWh (prix repère CRE, profil chauffage)
-export const PRIX_FIOUL_LITRE = 1.8; // €/L (≈ 0,18 €/kWh brut)
-export const PCI_FIOUL = 10; // kWh/L (pouvoir calorifique inférieur du fioul)
-export const PRIX_ELEC = 0.19; // €/kWh (TRV base, ordre de grandeur)
+/**
+ * Table de référence par énergie (méthode PacCloser §0) :
+ * prix €/kWh TTC, abonnement/location fixe €/an, inflation annuelle par défaut,
+ * rendement d'une chaudière NEUVE (pour le scénario "remplacer la chaudière"),
+ * prix indicatif d'une chaudière neuve posée (éditable).
+ */
+export const ENERGIES = {
+  gaz: {
+    prixKwh: 0.12766,
+    abonnement: 359.63,
+    inflation: 0.05,
+    rendementNeuf: 0.92,
+    prixChaudiereNeuve: 4500,
+  },
+  fioul: {
+    prixKwh: 0.141, // = 1,41 €/L à 10 kWh/L
+    abonnement: 0,
+    inflation: 0.04,
+    rendementNeuf: 0.9,
+    prixChaudiereNeuve: 8500,
+  },
+};
+
+export const PCI_FIOUL = 10; // kWh/L (1 L de fioul ≈ 10 kWh PCI)
+export const PRIX_FIOUL_LITRE = ENERGIES.fioul.prixKwh * PCI_FIOUL; // 1,41 €/L
+
+/* --- Électricité (PAC) --- */
+export const PRIX_ELEC = 0.194; // €/kWh TTC (TRV)
+export const ELEC_INFLATION = 0.025; // inflation élec par défaut (2,5 %/an)
+export const ELEC_ABO_SUPP = 80; // €/an — hausse d'abonnement (kVA) fréquente avec une PAC
+export const COP_ECS = 2.5; // COP de production ECS par la PAC (eau à ~55 °C)
+
+/* --- Entretien annuel (comparaison "tout compris", PacCloser §8) --- */
+export const ENTRETIEN_PAC = 180; // €/an (PAC air/eau)
+export const ENTRETIEN_CHAUDIERE = 150; // €/an (gaz/fioul)
+
+/* --- Scénario prudent fioul (anti-volatilité, PacCloser §16) --- */
+export const PRIX_FIOUL_NORMALISE_LITRE = 1.15; // €/L de référence figé
+
+/* --- Vieillissement chaudière (PacCloser §11-12) --- */
+export const DUREE_VIE_CHAUDIERE = 20; // ans — remplacement forcé au-delà
+/** Âge représentatif selon le type déclaré (sert au provisionnement pannes). */
+export const AGE_CHAUDIERE = { condensation: 5, standard: 15, ancienne: 22 };
+/** Provision annuelle de pannes selon l'âge de la chaudière. */
+export function provisionPannes(age) {
+  if (age >= 15) return 250;
+  if (age >= 10) return 100;
+  return 0;
+}
 
 /* --- Thermique --- */
 export const T_INT = 20; // consigne intérieure °C par défaut (méthode PacCloser)
+export const HAUTEUR_SOUS_PLAFOND_DEFAUT = 2.5; // m (norme française usuelle)
 
 /** Énergie utile ECS (kWh/an) en fonction du nombre d'occupants. */
 export function E_ECS_UTILE(nbPersonnes) {
   return 1000 + 600 * Math.max(0, nbPersonnes || 0);
 }
 
-/* --- Rendements chaudière (méthode PacCloser : type × combustible) --- */
+/* --- Rendements chaudière ACTUELLE (méthode PacCloser : type × combustible) --- */
 export const RENDEMENTS_CHAUDIERE = {
   condensation: { gaz: 0.92, fioul: 0.9 }, // < 10 ans
   standard: { gaz: 0.85, fioul: 0.83 }, // 10–20 ans
@@ -38,15 +83,20 @@ export function rendementChaudiere(typeKey, energie) {
 export const PCS_PCI_RATIO = 1 / 1.11; // PCI = PCS / 1,11
 export const CORRECTION_PCI_GAZ_DEFAUT = true;
 
-/* --- Ratios de déperdition par époque (W/m²) — Moteur 1 voie B ---
- * Fourchettes [bas, haut] du fichier coefficients_thermiques.md §1.
- * haut = pire cas (aucun travaux d'isolation) ; bas = logement rénové.
+/**
+ * Coefficient G de déperdition globale (W/m³·K) par période de construction —
+ * Moteur 1 voie B, méthode volumique (P = G × V × ΔT) de l'étude de prix 2026
+ * (matrice RT 1974 → RE 2020).
+ * Fourchette [bas, haut] par époque : haut = état d'origine (aucun travaux),
+ * bas = logement largement rénové (rejoint le niveau d'une époque plus récente).
  */
-export const RATIOS_W_M2_RANGE = {
-  avant_1975: [100, 130], // non isolé
-  de_1975_2000: [70, 100], // isolation partielle
-  rt2005: [50, 70], // 2000–2012
-  rt2012: [30, 50], // RT2012 et +
+export const G_RANGE = {
+  avant_1974: [1.05, 2.15], // aucune isolation d'origine (DPE F-G)
+  de_1974_1988: [0.9, 1.45], // RT 1974 / RT 1982
+  de_1989_2000: [0.8, 1.05], // RT 1988
+  de_2001_2012: [0.62, 0.82], // RT 2000 / RT 2005
+  rt2012: [0.4, 0.55], // 2013–2021, BBC
+  re2020: [0.22, 0.3], // après 2022
 };
 
 /**
@@ -66,12 +116,22 @@ export const COEF_DIM = 0.9; // ∈ [0.80, 1.00] ; l'appoint élec couvre les po
 export const PUISSANCES_COMMERCIALES = [6, 8, 11, 14, 16]; // kW
 
 /**
+ * Supplément de puissance ECS (PAC "Duo") selon la taille du foyer — étude 2026 :
+ * +1 kW (1-2 pers) · +1,5 à 2 kW (3-4 pers) · +2,5 à 3 kW (5 pers et plus).
+ */
+export function supplementEcsKw(nbPersonnes) {
+  const n = Number(nbPersonnes) || 0;
+  if (n <= 0) return 0;
+  if (n <= 2) return 1;
+  if (n <= 4) return 1.75;
+  return 2.75;
+}
+
+/**
  * Prix — Moteur 3 (€ TTC, pose comprise) : grille réelle Savelys.
- * Fonction de la puissance de DÉPERDITION (kW), pas de la puissance commerciale.
- * Relation non linéaire (pente 4→8 kW plus forte que 8→15 kW) → interpolation
- * linéaire par morceaux sur ces points, clampée en dehors de [4,15] kW.
- * Le type d'émetteur n'influence plus le prix (décision utilisateur) ; il reste
- * utilisé pour le SCOP (Moteur 4).
+ * Fonction de la puissance de DÉPERDITION (kW) ; interpolation linéaire par
+ * morceaux, clampée en dehors de [4,15] kW. Le type d'émetteur n'influence pas
+ * le prix (décision utilisateur) ; il reste utilisé pour le SCOP (Moteur 4).
  */
 export const PRIX_PAR_DEPERDITION = [
   { depKw: 4, prix: 11000 },
@@ -79,6 +139,12 @@ export const PRIX_PAR_DEPERDITION = [
   { depKw: 15, prix: 17000 },
 ];
 export const SUPPLEMENT_ECS = 2000; // € ajoutés si chauffage + eau chaude sanitaire
+/**
+ * Majoration de pose en Île-de-France (étude 2026 : taux horaire 70–140 € HT vs
+ * 40–80 € en province, facteur ≥ 1,35 sur la main-d'œuvre → forfait +≈1 200 €).
+ */
+export const MAJORATION_POSE_IDF = 1200; // €
+export const DEPTS_IDF = new Set(["75", "77", "78", "91", "92", "93", "94", "95"]);
 export const PRIX_FOURCHETTE = 0.08; // ±8 % autour du prix central
 
 /* --- Amortissement — Moteur 4 --- */
@@ -91,5 +157,4 @@ export const SCOP = {
 export const PROJECTION_ANNEES = 10;
 
 /* --- Divers --- */
-export const HAUTEUR_SOUS_PLAFOND_DEFAUT = 2.5; // m (non utilisé par voie A/B mais dispo)
 export const ECART_AB_ALERTE = 0.3; // écart relatif A/B au-delà duquel on avertit

@@ -99,46 +99,72 @@ export function renderResultatFinal(r) {
         <div class="stat stat--success">
           <span class="stat__label">Économies annuelles</span>
           <span class="stat__value">${fmtEuro(m.economieAn)}<span class="stat__unit">/an</span></span>
-          <span class="stat__hint">vs énergie actuelle</span>
+          <span class="stat__hint">énergie, abonnements et entretien inclus</span>
         </div>
         <div class="stat stat--accent">
           <span class="stat__label">Amortissement</span>
           <span class="stat__value">${fmtAns(m.amortissementAns)}</span>
-          <span class="stat__hint">SCOP ${nf1.format(m.scop)}</span>
+          <span class="stat__hint">SCOP ${nf1.format(m.scop)} · ECS au COP ${nf1.format(m.copEcs)}</span>
         </div>
       </div>
 
-      ${renderProjection(m.projection)}
+      ${
+        m.economieFioulNormalise != null
+          ? `<p class="note">🛢️ Par prudence, avec un fioul à 1,15 €/L (prix de référence hors pics),
+             l'économie resterait d'environ <strong>${fmtEuro(m.economieFioulNormalise)}/an</strong>.</p>`
+          : ""
+      }
+
+      ${renderProjection(m)}
     </div>
   `;
 }
 
-/** Mini-graphe SVG de la projection cumulée sur 10 ans (économies − reste à charge). */
-export function renderProjection(projection) {
+/**
+ * Graphe SVG : coût CUMULÉ sur 10 ans des deux scénarios (rester sur l'énergie
+ * actuelle vs passer à la PAC), inflation, pannes et fin de vie chaudière incluses.
+ */
+export function renderProjection(m) {
+  const projection = m.projection;
   if (!projection || !projection.length) return "";
   const w = 320;
-  const h = 120;
-  const pad = 8;
+  const h = 130;
+  const pad = 10;
   const xs = projection.map((p) => p.annee);
-  const ys = projection.map((p) => p.cumul);
-  const minY = Math.min(0, ...ys);
-  const maxY = Math.max(0, ...ys);
+  const all = projection.flatMap((p) => [p.cumActuel, p.cumPac]);
+  const minY = Math.min(...all, 0);
+  const maxY = Math.max(...all) || 1;
   const spanY = maxY - minY || 1;
   const x = (a) => pad + ((a - xs[0]) / (xs[xs.length - 1] - xs[0] || 1)) * (w - 2 * pad);
   const y = (v) => h - pad - ((v - minY) / spanY) * (h - 2 * pad);
-  const zeroY = y(0);
-  const pts = projection.map((p) => `${x(p.annee).toFixed(1)},${y(p.cumul).toFixed(1)}`).join(" ");
-  const breakEven = projection.find((p) => p.cumul >= 0);
+  const line = (key) => projection.map((p) => `${x(p.annee).toFixed(1)},${y(p[key]).toFixed(1)}`).join(" ");
+
+  const cross = m.crossover;
+  let crossSvg = "";
+  if (cross != null && cross >= 1) {
+    const i = Math.min(Math.ceil(cross), projection.length) - 1;
+    crossSvg = `<circle cx="${x(projection[i].annee).toFixed(1)}" cy="${y(projection[i].cumPac).toFixed(1)}" r="4" class="dot" />`;
+  }
+
+  const verdict =
+    cross != null
+      ? `La PAC devient gagnante au bout d'environ <strong>${nf1.format(cross)} an${cross >= 2 ? "s" : ""}</strong> —
+         soit ≈ <strong>${fmtEuro(m.diff10)}</strong> d'écart cumulé en votre faveur à 10 ans.`
+      : "Croisement au-delà de 10 ans dans cette configuration.";
 
   return `
     <figure class="projection">
-      <figcaption>Projection cumulée sur 10 ans</figcaption>
-      <svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Courbe de rentabilité cumulée">
-        <line x1="${pad}" y1="${zeroY}" x2="${w - pad}" y2="${zeroY}" class="axis" />
-        <polyline points="${pts}" class="curve" fill="none" />
-        ${breakEven ? `<circle cx="${x(breakEven.annee).toFixed(1)}" cy="${zeroY}" r="4" class="dot" />` : ""}
+      <figcaption>Coût cumulé sur 10 ans : rester ou passer à la PAC</figcaption>
+      <svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Comparaison des coûts cumulés sur 10 ans">
+        <polyline points="${line("cumActuel")}" class="curve curve--actuel" fill="none" />
+        <polyline points="${line("cumPac")}" class="curve" fill="none" />
+        ${crossSvg}
       </svg>
-      <p class="note">${breakEven ? `Rentable dès l'année ${breakEven.annee}.` : "Rentabilité au-delà de 10 ans."}</p>
+      <p class="legend">
+        <span class="legend__item"><span class="legend__swatch legend__swatch--actuel"></span> Garder ma chaudière</span>
+        <span class="legend__item"><span class="legend__swatch legend__swatch--pac"></span> Passer à la PAC</span>
+      </p>
+      <p class="note">${verdict}</p>
     </figure>
   `;
 }

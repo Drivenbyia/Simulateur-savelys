@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { getZoneFromPostal } from "../js/data/postal-zones.js";
+import { getZoneFromPostal, getTbaseFromPostal } from "../js/data/postal-zones.js";
 import { getZone, zoneCoarse } from "../js/data/climate.js";
 import {
   calculerDeperditions,
@@ -14,7 +14,7 @@ import {
   deperditionsVoieB,
   consoEnKwh,
   setbackRatio,
-  ratioIsolation,
+  coefG,
 } from "../js/engines/deperditions.js";
 import { dimensionnerPAC, mapPuissanceCommerciale } from "../js/engines/dimensionnement.js";
 import { estimerPrix, interpolerPrix } from "../js/engines/prix.js";
@@ -38,6 +38,13 @@ test("zoneCoarse : sous-zone RT2012 → zone grossière H1/H2/H3", () => {
   assert.equal(zoneCoarse("H2c"), "H2");
   assert.equal(zoneCoarse("H1a"), "H1");
   assert.equal(zoneCoarse("H3"), "H3");
+});
+
+test("T_base départementale (étude 2026)", () => {
+  assert.equal(getTbaseFromPostal("24000"), -5); // Dordogne
+  assert.equal(getTbaseFromPostal("67000"), -15); // Bas-Rhin (bien plus froid que la sous-zone)
+  assert.equal(getTbaseFromPostal("20000"), -2); // Corse
+  assert.equal(getTbaseFromPostal("abc"), null);
 });
 
 /* --- Moteur 1 : déperditions --- */
@@ -73,36 +80,49 @@ test("setbackRatio : réduit sous 1 avec un réduit nocturne", () => {
   assert.ok(r < 1 && r >= 0.5, `ratio ${r}`);
 });
 
-test("ratioIsolation : fourchette glissée selon les travaux", () => {
-  // avant_1975 = [100,130] : aucun travaux → 130 (haut) ; tout rénové → 100 (bas)
-  assert.equal(ratioIsolation("avant_1975", {}), 130);
-  assert.equal(
-    ratioIsolation("avant_1975", { toiture_combles: true, murs: true, fenetres: true, plancher_bas: true }),
-    100
+test("coefG : fourchette G glissée selon les travaux (étude 2026)", () => {
+  // avant_1974 = [1.05, 2.15] : aucun travaux → 2.15 (origine) ; tout rénové → 1.05
+  assert.equal(coefG("avant_1974", {}), 2.15);
+  assert.ok(
+    approx(
+      coefG("avant_1974", { toiture_combles: true, murs: true, fenetres: true, plancher_bas: true }),
+      1.05,
+      1e-9
+    )
   );
-  // toiture seule (poids 0.39) → 130 − 30×0.39 = 118.3
-  assert.ok(approx(ratioIsolation("avant_1975", { toiture_combles: true }), 118.3, 0.01));
+  // toiture seule (poids 0.39) → 2.15 − 1.10×0.39 = 1.721
+  assert.ok(approx(coefG("avant_1974", { toiture_combles: true }), 1.721, 0.001));
+  assert.equal(coefG("re2020", {}), 0.3);
 });
 
-test("voie B : surface × ratio(époque, travaux) / 1000", () => {
-  const zone = getZone("H1a");
+test("voie B volumique : P = G × V × ΔT / 1000", () => {
+  const zone = getZone("H1a"); // dju 2580, tExtBase -7 → ΔT = 27
   const b = deperditionsVoieB({
     surface: 100,
-    epoqueKey: "avant_1975", // aucun travaux → ratio 130
+    hauteur: 2.5,
+    epoqueKey: "avant_1974", // aucun travaux → G 2.15
     ecsUtileKwh: 0,
     dju: zone.dju,
     tExtBase: zone.tExtBase,
     tInt: 20,
   });
-  assert.ok(approx(b.pDeperditionKW, 13.0), `attendu ~13.0, obtenu ${b.pDeperditionKW}`);
+  // 2.15 × 250 m³ × 27 K / 1000 = 14.51 kW
+  assert.ok(approx(b.pDeperditionKW, 14.51, 0.02), `attendu ~14.51, obtenu ${b.pDeperditionKW}`);
   assert.ok(b.usefulHeatKwh > 0);
 
-  // Avec travaux → déperdition plus faible
+  // Avec travaux → déperdition plus faible ; climat plus doux → plus faible aussi
   const bRenove = deperditionsVoieB({
-    surface: 100, epoqueKey: "avant_1975", travaux: { toiture_combles: true, murs: true },
+    surface: 100, hauteur: 2.5, epoqueKey: "avant_1974",
+    travaux: { toiture_combles: true, murs: true },
     ecsUtileKwh: 0, dju: zone.dju, tExtBase: zone.tExtBase, tInt: 20,
   });
   assert.ok(bRenove.pDeperditionKW < b.pDeperditionKW);
+
+  const bDoux = deperditionsVoieB({
+    surface: 100, hauteur: 2.5, epoqueKey: "avant_1974",
+    ecsUtileKwh: 0, dju: 1480, tExtBase: -2, tInt: 20, // H3 littoral
+  });
+  assert.ok(bDoux.pDeperditionKW < b.pDeperditionKW);
 });
 
 test("croisement A/B : on retient A et on lève l'avertissement si écart > 30 %", () => {
@@ -113,7 +133,7 @@ test("croisement A/B : on retient A et on lève l'avertissement si écart > 30 %
     typeChaudiereKey: "condensation",
     ecsUtileKwh: 0,
     surface: 300, // volontairement grand → voie B très supérieure à A
-    epoqueKey: "avant_1975",
+    epoqueKey: "avant_1974",
     dju: zone.dju,
     tExtBase: zone.tExtBase,
     tInt: 20,
@@ -130,6 +150,16 @@ test("dimensionnement PAC et mapping puissance commerciale", () => {
   assert.ok(approx(d.pPacKW, 10.35), `pPac ${d.pPacKW}`);
   assert.equal(d.pCommercialeKW, 11);
   assert.equal(mapPuissanceCommerciale(20), 16); // au-delà du max → plus grande dispo
+});
+
+test("dimensionnement : supplément ECS selon la taille du foyer (étude 2026)", () => {
+  const sans = dimensionnerPAC(10, { avecEcs: false, nbPersonnes: 4 });
+  const avec = dimensionnerPAC(10, { avecEcs: true, nbPersonnes: 4 });
+  assert.equal(sans.suppEcsKW, 0);
+  assert.equal(avec.suppEcsKW, 1.75); // foyer 3-4 personnes
+  assert.ok(approx(avec.pPacKW, 10.75, 0.001)); // 10×0.9 + 1.75
+  assert.equal(dimensionnerPAC(10, { avecEcs: true, nbPersonnes: 6 }).suppEcsKW, 2.75);
+  assert.equal(dimensionnerPAC(10, { avecEcs: true, nbPersonnes: 2 }).suppEcsKW, 1);
 });
 
 /* --- Moteur 3 : prix (grille réelle Savelys, interpolation par morceaux) --- */
@@ -159,6 +189,11 @@ test("estimerPrix : ECS ajoute le supplément fixe, fourchette encadre le centra
 
   const avecEcs = estimerPrix({ pDeperditionKW: 8, avecEcs: true });
   assert.equal(avecEcs.prixCentral, 17000); // +2000€ ECS
+});
+
+test("estimerPrix : majoration de pose Île-de-France", () => {
+  const idf = estimerPrix({ pDeperditionKW: 8, avecEcs: false, idf: true });
+  assert.equal(idf.prixCentral, 16200); // 15000 + 1200 de main-d'œuvre francilienne
 });
 
 /* --- Moteur 5 : aides --- */
@@ -232,25 +267,60 @@ test("profil rose : MPR nul et pas de bonus fioul", () => {
   assert.equal(a.cee, 4915); // H1 grande autres
 });
 
-/* --- Moteur 4 : amortissement --- */
-test("coût énergie actuelle", () => {
-  assert.ok(approx(coutEnergieActuelle("fioul", 2000), 3600, 0.01));
-  assert.ok(approx(coutEnergieActuelle("gaz", 20000), 2560, 0.01));
+/* --- Moteur 4 : économies & amortissement (méthode PacCloser) --- */
+test("coût énergie actuelle : tables PacCloser (prix + abonnement)", () => {
+  // Fioul : 2000 L × 10 kWh/L × 0,141 €/kWh (= 1,41 €/L), pas d'abonnement.
+  assert.ok(approx(coutEnergieActuelle("fioul", 2000), 2820, 0.01));
+  // Gaz : 20 000 kWh × 0,12766 + abonnement 359,63.
+  assert.ok(approx(coutEnergieActuelle("gaz", 20000), 2912.83, 0.01));
 });
 
-test("amortissement : économie positive et durée cohérente", () => {
+test("économies : cas réel 1600 L fioul (celui signalé comme trop optimiste)", () => {
+  // Chaleur utile issue de la voie A : chaudière fioul standard (0.83), 3 pers ECS.
+  const r = calculerAmortissement({
+    eChaufKwh: 10480, // (16000 − 2800/0.83) × 0.83
+    eEcsKwh: 2800,
+    emetteurKey: "radiateurs_BT",
+    energieActuelle: "fioul",
+    consoReelle: 1600, // litres
+    typeChaudiereKey: "standard",
+    avecEcs: true,
+    prixCentral: 15000,
+    aidesTotales: 3000,
+  });
+  // Facture actuelle : 1600 L × 1,41 = 2256 €/an.
+  assert.ok(approx(r.coutActuel, 2256, 0.5), `coutActuel ${r.coutActuel}`);
+  // PAC : 10480/3.5 + 2800/2.5 = 4114 kWh élec × 0,194 + 80 € abo ≈ 878 €/an.
+  assert.ok(approx(r.coutFutur, 878.2, 1), `coutFutur ${r.coutFutur}`);
+  // Économie "tout compris" ≈ 1 348 €/an — et non ~2 300 € comme avant correction.
+  assert.ok(r.economieAn > 1300 && r.economieAn < 1400, `économie ${r.economieAn}`);
+  // Payback honnête : 12 000 / 1 348 ≈ 8,9 ans.
+  assert.ok(r.amortissementAns > 8 && r.amortissementAns < 10, `amort ${r.amortissementAns}`);
+  // Scénario prudent fioul à 1,15 €/L : économie plus basse mais positive.
+  assert.ok(r.economieFioulNormalise > 800 && r.economieFioulNormalise < r.economieAn);
+  // Chaudière standard (~15 ans) → remplacement forcé en année 5 dans la projection.
+  assert.equal(r.anRemplacement, 5);
+});
+
+test("projection 10 ans : deux scénarios cumulés + point de croisement", () => {
   const r = calculerAmortissement({
     eChaufKwh: 16000,
     eEcsKwh: 3400,
     emetteurKey: "radiateurs_BT",
     energieActuelle: "gaz",
     consoReelle: 20000,
-    prixCentral: 18221.25,
+    typeChaudiereKey: "ancienne", // > 20 ans → remplacement dès l'année 1
+    avecEcs: true,
+    prixCentral: 17000,
     aidesTotales: 10800,
   });
-  assert.ok(r.economieAn > 0, `économie ${r.economieAn}`);
-  assert.ok(approx(r.resteACharge, 7421.25, 1));
-  assert.ok(r.amortissementAns > 3 && r.amortissementAns < 8, `amort ${r.amortissementAns}`);
   assert.equal(r.projection.length, 10);
-  assert.ok(r.projection[9].cumul > 0); // rentable avant 10 ans
+  assert.equal(r.anRemplacement, 1);
+  const last = r.projection[9];
+  assert.ok(last.cumActuel > 0 && last.cumPac > 0);
+  // Vieille chaudière + grosses aides → la PAC croise dans la fenêtre de 10 ans.
+  assert.ok(r.crossover != null && r.crossover <= 10, `crossover ${r.crossover}`);
+  assert.ok(r.diff10 > 0, `diff10 ${r.diff10}`);
+  // Le cumul "rester" inclut le remplacement forcé (4 500 € gaz) dès l'année 1.
+  assert.ok(r.projection[0].cumActuel > 4500);
 });

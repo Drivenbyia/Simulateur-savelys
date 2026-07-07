@@ -181,7 +181,13 @@ input[type="range"] { width: 100%; accent-color: var(--sav-primary); height: 1.6
 .projection svg { width: 100%; height: auto; background: var(--sav-bg); border-radius: var(--radius-sm); }
 .projection .axis { stroke: var(--sav-border); stroke-width: 1; }
 .projection .curve { stroke: var(--sav-success); stroke-width: 2.5; }
+.projection .curve--actuel { stroke: var(--sav-warn); stroke-dasharray: 5 4; }
 .projection .dot { fill: var(--sav-primary); }
+.legend { display: flex; gap: 1.2rem; margin: .4rem 0 0; font-size: .8rem; color: var(--sav-muted); }
+.legend__item { display: inline-flex; align-items: center; gap: .35rem; }
+.legend__swatch { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+.legend__swatch--actuel { background: var(--sav-warn); }
+.legend__swatch--pac { background: var(--sav-success); }
 
 /* --- Lead / gate --- */
 .teaser { background: rgba(15, 111, 179, .06); border: 1px solid var(--sav-border); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1rem; }

@@ -43,8 +43,13 @@ export function validateStep(step, state) {
       return { ok: true };
     }
     case 2: {
-      // La conso est optionnelle (mais conseillée) ; on ne bloque pas dessus.
       if (!state.chauffage.energie) return { ok: false, message: "Choisissez votre énergie actuelle." };
+      if (state.estimation.methode === "conso") {
+        if (!(Number(state.chauffage.conso) > 0))
+          return { ok: false, message: "Indiquez votre consommation annuelle (ou estimez par le logement)." };
+      } else if (!state.logement.epoqueKey) {
+        return { ok: false, message: "Choisissez l'année de construction." };
+      }
       return { ok: true };
     }
     case 3: {
@@ -54,10 +59,10 @@ export function validateStep(step, state) {
       return { ok: true };
     }
     case 5: {
-      if (!(Number(state.aides.rfr) > 0))
-        return { ok: false, message: "Indiquez votre revenu fiscal de référence." };
       if (!(Number(state.aides.nbPersonnes) > 0))
         return { ok: false, message: "Indiquez le nombre de personnes au foyer." };
+      if (!state.aides.profil)
+        return { ok: false, message: "Sélectionnez votre tranche de revenu." };
       return { ok: true };
     }
     default:

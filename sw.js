@@ -9,6 +9,7 @@ const ASSETS = [
   "./styles/main.css",
   "./manifest.webmanifest",
   "./icons/icon.svg",
+  "./icons/logo-savelys.svg",
   "./js/app.js",
   "./js/constants.js",
   "./js/data/climate.js",

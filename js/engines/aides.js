@@ -53,13 +53,16 @@ export function ceeSavelys(zone, surface, profil) {
 
 /**
  * Calcule le total des aides après écrêtement.
+ * `profil` peut être fourni directement (l'utilisateur choisit sa tranche couleur) ;
+ * sinon il est déduit du RFR via `determinerProfil` (rétro-compatible).
  * @param {{
- *   rfr:number, nbPersonnes:number, region?:"hors_idf"|"idf",
- *   energieActuelle:"gaz"|"fioul", prixCentral:number,
+ *   profil?:"bleu"|"jaune"|"violet"|"rose", rfr?:number, nbPersonnes:number,
+ *   region?:"hors_idf"|"idf", energieActuelle:"gaz"|"fioul", prixCentral:number,
  *   zone:"H1"|"H2"|"H3", surface:number
  * }} input
  */
 export function calculerAides({
+  profil: profilExplicite,
   rfr,
   nbPersonnes,
   region = "hors_idf",
@@ -68,7 +71,7 @@ export function calculerAides({
   zone,
   surface,
 }) {
-  const profil = determinerProfil(rfr, nbPersonnes, region);
+  const profil = profilExplicite || determinerProfil(rfr, nbPersonnes, region);
 
   const mpr = MPR_PAR_GESTE[profil];
   const cee = ceeSavelys(zone, surface, profil);

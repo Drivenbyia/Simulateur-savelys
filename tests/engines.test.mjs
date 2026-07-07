@@ -14,6 +14,7 @@ import {
   deperditionsVoieB,
   consoEnKwh,
   setbackRatio,
+  ratioIsolation,
 } from "../js/engines/deperditions.js";
 import { dimensionnerPAC, mapPuissanceCommerciale } from "../js/engines/dimensionnement.js";
 import { estimerPrix, interpolerPrix } from "../js/engines/prix.js";
@@ -72,18 +73,36 @@ test("setbackRatio : réduit sous 1 avec un réduit nocturne", () => {
   assert.ok(r < 1 && r >= 0.5, `ratio ${r}`);
 });
 
-test("voie B : surface × ratio / 1000", () => {
+test("ratioIsolation : fourchette glissée selon les travaux", () => {
+  // avant_1975 = [100,130] : aucun travaux → 130 (haut) ; tout rénové → 100 (bas)
+  assert.equal(ratioIsolation("avant_1975", {}), 130);
+  assert.equal(
+    ratioIsolation("avant_1975", { toiture_combles: true, murs: true, fenetres: true, plancher_bas: true }),
+    100
+  );
+  // toiture seule (poids 0.39) → 130 − 30×0.39 = 118.3
+  assert.ok(approx(ratioIsolation("avant_1975", { toiture_combles: true }), 118.3, 0.01));
+});
+
+test("voie B : surface × ratio(époque, travaux) / 1000", () => {
   const zone = getZone("H1a");
   const b = deperditionsVoieB({
     surface: 100,
-    epoqueKey: "avant_1975", // ratio 115
+    epoqueKey: "avant_1975", // aucun travaux → ratio 130
     ecsUtileKwh: 0,
     dju: zone.dju,
     tExtBase: zone.tExtBase,
     tInt: 20,
   });
-  assert.ok(approx(b.pDeperditionKW, 11.5), `attendu ~11.5, obtenu ${b.pDeperditionKW}`);
+  assert.ok(approx(b.pDeperditionKW, 13.0), `attendu ~13.0, obtenu ${b.pDeperditionKW}`);
   assert.ok(b.usefulHeatKwh > 0);
+
+  // Avec travaux → déperdition plus faible
+  const bRenove = deperditionsVoieB({
+    surface: 100, epoqueKey: "avant_1975", travaux: { toiture_combles: true, murs: true },
+    ecsUtileKwh: 0, dju: zone.dju, tExtBase: zone.tExtBase, tInt: 20,
+  });
+  assert.ok(bRenove.pDeperditionKW < b.pDeperditionKW);
 });
 
 test("croisement A/B : on retient A et on lève l'avertissement si écart > 30 %", () => {
@@ -185,6 +204,17 @@ test("CEE Savelys : très modeste ≠ autres, et tranche de surface", () => {
     zone: "H2", surface: 120, // > 90 → "grande", profil bleu → tres_modeste
   });
   assert.equal(grandeModeste.cee, 6060); // H2 grande très modeste
+});
+
+test("aides : profil explicite prioritaire sur le RFR", () => {
+  const a = calculerAides({
+    profil: "jaune", // choisi directement par l'utilisateur (carte tranche)
+    rfr: 20000, // serait "bleu" si déduit → doit être ignoré
+    nbPersonnes: 2, energieActuelle: "gaz", prixCentral: 12000,
+    zone: "H2", surface: 120,
+  });
+  assert.equal(a.profil, "jaune");
+  assert.equal(a.mpr, 4000); // MPR jaune
 });
 
 test("profil rose : MPR nul et pas de bonus fioul", () => {

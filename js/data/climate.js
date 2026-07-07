@@ -20,6 +20,21 @@ export const ZONES_CLIMATIQUES = {
 /** Valeurs climatiques par défaut (PacCloser) si aucune zone n'est résolue. */
 export const CLIMAT_DEFAUT = { libelle: "Climat par défaut", dju: 2000, tExtBase: -5 };
 
+/**
+ * ⚠️ RÉSERVE — Modèle de besoin FROID (climatisation), hors périmètre actuel
+ * (simulateur orienté chauffage). Conservé pour un module clim futur.
+ * Source : coefficients_thermiques.md §2–3.
+ * Froid en W/m³ (volume) selon le coef G d'isolation, puis × coef climatique zone.
+ */
+export const FROID_W_M3 = [
+  { gMax: 0.35, ratio: 30 }, // RE2020 / RT2012
+  { gMax: 0.8, ratio: 40 }, // RT2005
+  { gMax: 1.2, ratio: 45 }, // années 90
+  { gMax: 1.6, ratio: 50 },
+  { gMax: Infinity, ratio: 60 }, // avant 1974
+];
+export const FROID_COEF_ZONE = { A: 0.85, C: 0.85, D: 0.85, B: 1, E: 1, F: 1, G: 1.1, I: 1.1, H: 1.25 };
+
 export function getZone(codeZone) {
   return ZONES_CLIMATIQUES[codeZone] || null;
 }

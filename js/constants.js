@@ -38,12 +38,27 @@ export function rendementChaudiere(typeKey, energie) {
 export const PCS_PCI_RATIO = 1 / 1.11; // PCI = PCS / 1,11
 export const CORRECTION_PCI_GAZ_DEFAUT = true;
 
-/* --- Ratios de déperdition par époque / isolation (W/m²) — Moteur 1 voie B --- */
-export const RATIOS_W_M2 = {
-  avant_1975: 115, // non isolé (fourchette cahier 100–130)
-  de_1975_2000: 85, // isolation partielle (70–100)
-  rt2005: 60, // 2000–2012 (50–70)
-  rt2012: 40, // RT2012 et + (30–50)
+/* --- Ratios de déperdition par époque (W/m²) — Moteur 1 voie B ---
+ * Fourchettes [bas, haut] du fichier coefficients_thermiques.md §1.
+ * haut = pire cas (aucun travaux d'isolation) ; bas = logement rénové.
+ */
+export const RATIOS_W_M2_RANGE = {
+  avant_1975: [100, 130], // non isolé
+  de_1975_2000: [70, 100], // isolation partielle
+  rt2005: [50, 70], // 2000–2012
+  rt2012: [30, 50], // RT2012 et +
+};
+
+/**
+ * Poids de chaque poste d'isolation dans les déperditions (répartition ADEME,
+ * normalisée pour que "tout rénové" atteigne le bas de fourchette). Somme = 1.
+ * ADEME : toiture 25–30 % · murs ~20–25 % · fenêtres 10–15 % · plancher 7–10 %.
+ */
+export const POIDS_ISOLATION = {
+  toiture_combles: 0.39,
+  murs: 0.32,
+  fenetres: 0.18,
+  plancher_bas: 0.11,
 };
 
 /* --- Dimensionnement PAC — Moteur 2 --- */

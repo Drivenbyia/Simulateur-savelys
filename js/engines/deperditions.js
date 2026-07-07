@@ -14,13 +14,31 @@
 
 import {
   PCI_FIOUL,
-  RATIOS_W_M2,
+  RATIOS_W_M2_RANGE,
+  POIDS_ISOLATION,
   T_INT,
   rendementChaudiere,
   PCS_PCI_RATIO,
   CORRECTION_PCI_GAZ_DEFAUT,
   ECART_AB_ALERTE,
 } from "../constants.js";
+
+/**
+ * Ratio de déperdition (W/m²) pour une époque, glissé dans sa fourchette [bas,haut]
+ * selon les travaux d'isolation déclarés. Aucun travaux → haut (pire cas) ;
+ * tous les postes → bas. `travaux` = { fenetres, murs, toiture_combles, plancher_bas }.
+ */
+export function ratioIsolation(epoqueKey, travaux = {}) {
+  const range = RATIOS_W_M2_RANGE[epoqueKey];
+  if (!range) return 0;
+  const [bas, haut] = range;
+  let part = 0;
+  for (const poste in POIDS_ISOLATION) {
+    if (travaux[poste]) part += POIDS_ISOLATION[poste];
+  }
+  part = Math.min(1, part);
+  return haut - (haut - bas) * part;
+}
 
 /** Consommation saisie convertie en kWh d'énergie achetée (kwhBase). */
 export function consoEnKwh(energie, conso) {
@@ -102,19 +120,20 @@ export function deperditionsVoieA({
 export function deperditionsVoieB({
   surface,
   epoqueKey,
+  travaux = {},
   ecsUtileKwh = 0,
   dju,
   tExtBase,
   tInt = T_INT,
 }) {
-  const ratio = RATIOS_W_M2[epoqueKey];
+  const ratio = ratioIsolation(epoqueKey, travaux); // W/m², glissé selon les travaux
   const pDeperditionKW = ((Number(surface) || 0) * ratio) / 1000;
 
   const deltaT = tInt - tExtBase;
   // Inverse de la formule PacCloser : usefulHeat = P × DJU × 24 / ΔT.
   const usefulHeatKwh = deltaT > 0 ? (pDeperditionKW * dju * 24) / deltaT : 0;
 
-  return { pDeperditionKW, usefulHeatKwh, eEcsUtileKwh: ecsUtileKwh };
+  return { pDeperditionKW, usefulHeatKwh, eEcsUtileKwh: ecsUtileKwh, ratio };
 }
 
 /** Niveau de cohérence du croisement A/B (seuils PacCloser). */

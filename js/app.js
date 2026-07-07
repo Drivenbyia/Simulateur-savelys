@@ -7,16 +7,18 @@
 import { rendementChaudiere, PCI_FIOUL, T_INT, E_ECS_UTILE } from "./constants.js";
 import { getZone, CLIMAT_DEFAUT, zoneCoarse } from "./data/climate.js";
 import { getZoneFromPostal } from "./data/postal-zones.js";
+import { PROFIL_LABELS } from "./data/aides-baremes.js";
 import { calculerDeperditions } from "./engines/deperditions.js";
 import { dimensionnerPAC } from "./engines/dimensionnement.js";
 import { estimerPrix } from "./engines/prix.js";
-import { calculerAides } from "./engines/aides.js";
+import { calculerAides, seuilsPourFoyer } from "./engines/aides.js";
 import { calculerAmortissement } from "./engines/amortissement.js";
 import { STEPS, TOTAL_STEPS, renderProgress, validateStep } from "./ui/tunnel.js";
 import {
   renderPreResultat,
   renderResultatFinal,
   renderDatation,
+  fmtEuro,
   fmtEuroRange,
 } from "./ui/render.js";
 import { renderLeadForm, validateLead, buildLeadPayload, envoyerLead } from "./ui/lead.js";
@@ -25,56 +27,71 @@ import { renderLeadForm, validateLead, buildLeadPayload, envoyerLead } from "./u
 const state = {
   step: 1,
   leadSubmitted: false,
-  logement: { type: "maison", surface: 100, codePostal: "", epoqueKey: "de_1975_2000" },
+  estimation: { methode: "conso" }, // "conso" (recommandé) | "logement"
+  logement: {
+    type: "maison",
+    surface: 100,
+    codePostal: "",
+    epoqueKey: "de_1975_2000",
+    travaux: { toiture_combles: false, murs: false, fenetres: false, plancher_bas: false },
+  },
   chauffage: { energie: "gaz", typeChaudiereKey: "standard", conso: "" },
   besoins: { avecEcs: true, emetteurKey: "radiateurs_BT", nbOccupants: 3 },
-  aides: { region: "hors_idf", nbPersonnes: 3, rfr: "" },
+  aides: { region: "hors_idf", nbPersonnes: 3, profil: null },
   lead: { prenom: "", nom: "", canal: "email", email: "", tel: "", codePostal: "", consent: false },
 };
 
-// Type / âge de la chaudière (méthode PacCloser : rendement croisé type × combustible).
+// Listes d'options : [valeur, titre, sous-titre?].
 const TYPES_CHAUDIERE = [
-  ["condensation", "Condensation (moins de 10 ans)"],
-  ["standard", "Standard (10 à 20 ans)"],
-  ["ancienne", "Ancienne (plus de 20 ans)"],
+  ["condensation", "Condensation", "moins de 10 ans"],
+  ["standard", "Standard", "10 à 20 ans"],
+  ["ancienne", "Ancienne", "plus de 20 ans"],
 ];
-
 const EPOQUES = [
-  ["avant_1975", "Avant 1975 (non isolé)"],
-  ["de_1975_2000", "1975 – 2000 (isolation partielle)"],
-  ["rt2005", "2000 – 2012 (RT2005)"],
-  ["rt2012", "Après 2012 (RT2012 et +)"],
+  ["avant_1975", "Avant 1975", "non isolé à l'origine"],
+  ["de_1975_2000", "1975 – 2000", "isolation partielle"],
+  ["rt2005", "2000 – 2012", "RT2005"],
+  ["rt2012", "Après 2012", "RT2012 et +"],
 ];
-
 const EMETTEURS = [
-  ["plancher_BT", "Plancher chauffant"],
-  ["radiateurs_BT", "Radiateurs basse température"],
-  ["radiateurs_fonte_HT", "Radiateurs fonte (haute température)"],
+  ["plancher_BT", "Plancher chauffant", "basse température"],
+  ["radiateurs_BT", "Radiateurs basse température", "récents / acier"],
+  ["radiateurs_fonte_HT", "Radiateurs fonte", "haute température"],
 ];
-
-/* ------------------------------------------------------- normalisation --- */
-function normalize() {
-  if (!state.aides.rfr && state.aides.nbPersonnes == null) state.aides.nbPersonnes = state.besoins.nbOccupants;
-}
+const TRAVAUX = [
+  ["toiture_combles", "Toiture / combles", "🏠"],
+  ["murs", "Isolation des murs", "🧱"],
+  ["fenetres", "Fenêtres / double vitrage", "🪟"],
+  ["plancher_bas", "Plancher bas", "⬇️"],
+];
+const METHODES = [
+  ["conso", "Par ma consommation", "⭐ le plus précis"],
+  ["logement", "Par mon logement", "si je ne connais pas ma conso"],
+];
 
 /* ------------------------------------------------------------- calcul --- */
 function compute() {
-  normalize();
   const zoneCode = getZoneFromPostal(state.logement.codePostal);
   const zone = zoneCode ? getZone(zoneCode) : CLIMAT_DEFAUT;
   const ecsUtileKwh = state.besoins.avecEcs ? E_ECS_UTILE(state.besoins.nbOccupants) : 0;
 
-  const dep = calculerDeperditions({
+  // Voie de calcul selon la méthode choisie par l'utilisateur.
+  const depInput = {
     energie: state.chauffage.energie,
-    conso: state.chauffage.conso,
     typeChaudiereKey: state.chauffage.typeChaudiereKey,
     ecsUtileKwh,
     surface: state.logement.surface,
-    epoqueKey: state.logement.epoqueKey,
     dju: zone.dju,
     tExtBase: zone.tExtBase,
     tInt: T_INT,
-  });
+  };
+  if (state.estimation.methode === "conso") {
+    depInput.conso = state.chauffage.conso; // voie A (facture)
+  } else {
+    depInput.epoqueKey = state.logement.epoqueKey; // voie B (logement + travaux)
+    depInput.travaux = state.logement.travaux;
+  }
+  const dep = calculerDeperditions(depInput);
 
   const dim = dimensionnerPAC(dep.pDeperditionKW);
   const prix = estimerPrix({
@@ -83,7 +100,7 @@ function compute() {
   });
 
   const aides = calculerAides({
-    rfr: state.aides.rfr,
+    profil: state.aides.profil,
     nbPersonnes: state.aides.nbPersonnes,
     region: state.aides.region,
     energieActuelle: state.chauffage.energie,
@@ -114,8 +131,60 @@ function compute() {
 }
 
 /* ---------------------------------------------------------- templates --- */
-const opt = (list, sel) =>
-  list.map(([v, l]) => `<option value="${v}" ${v === sel ? "selected" : ""}>${l}</option>`).join("");
+/** Cartes radio (une seule sélection). options = [valeur, titre, sous-titre?]. */
+function optionCards(name, bind, options, selected, { rerender = false } = {}) {
+  const items = options
+    .map(
+      ([v, titre, sous]) => `
+      <label class="opt-card">
+        <input type="radio" name="${name}" data-bind="${bind}" value="${v}"
+          ${v === selected ? "checked" : ""} ${rerender ? "data-rerender" : ""} />
+        <span class="opt-card__body">
+          <span class="opt-card__title">${titre}</span>
+          ${sous ? `<span class="opt-card__sub">${sous}</span>` : ""}
+        </span>
+      </label>`
+    )
+    .join("");
+  return `<div class="option-cards">${items}</div>`;
+}
+
+/** Cartes à cocher (multi-sélection) pour les travaux d'isolation. */
+function travauxCards(travaux) {
+  const items = TRAVAUX.map(
+    ([k, titre, icon]) => `
+      <label class="opt-card opt-card--check">
+        <input type="checkbox" data-bind="logement.travaux.${k}" ${travaux[k] ? "checked" : ""} />
+        <span class="opt-card__body"><span class="opt-card__title">${icon} ${titre}</span></span>
+      </label>`
+  ).join("");
+  return `<div class="option-cards">${items}</div>`;
+}
+
+/** Cartes de tranche de revenu (profil couleur ANAH), seuils adaptés au foyer. */
+function profilCards() {
+  const s = seuilsPourFoyer(state.aides.nbPersonnes, state.aides.region);
+  const rows = [
+    ["bleu", `moins de ${fmtEuro(s.bleu)}`],
+    ["jaune", `${fmtEuro(s.bleu)} à ${fmtEuro(s.jaune)}`],
+    ["violet", `${fmtEuro(s.jaune)} à ${fmtEuro(s.violet)}`],
+    ["rose", `plus de ${fmtEuro(s.violet)}`],
+  ];
+  const items = rows
+    .map(
+      ([p, range]) => `
+      <label class="opt-card opt-card--profil">
+        <input type="radio" name="profil" data-bind="aides.profil" value="${p}"
+          ${state.aides.profil === p ? "checked" : ""} />
+        <span class="opt-card__body">
+          <span class="opt-card__title"><span class="dot badge--${p}"></span> ${PROFIL_LABELS[p]}</span>
+          <span class="opt-card__sub">Revenu fiscal de référence ${range}</span>
+        </span>
+      </label>`
+    )
+    .join("");
+  return `<div class="option-cards profil-cards">${items}</div>`;
+}
 
 function stepLogement() {
   const zoneCode = getZoneFromPostal(state.logement.codePostal);
@@ -138,17 +207,30 @@ function stepLogement() {
       <input type="text" inputmode="numeric" maxlength="5" pattern="\\d{5}" data-bind="logement.codePostal" data-rerender value="${state.logement.codePostal}" placeholder="ex. 24000" />
       <small class="hint">${zoneCode ? `Zone climatique détectée : <strong>${zoneCode}</strong>` : "Détermine votre zone climatique."}</small>
     </label>
-
-    <label class="field">
-      <span>Année de construction / isolation</span>
-      <select data-bind="logement.epoqueKey">${opt(EPOQUES, state.logement.epoqueKey)}</select>
-    </label>
   `;
 }
 
 function stepChauffage() {
   const e = state.chauffage.energie;
+  const m = state.estimation.methode;
   const consoLabel = e === "fioul" ? "Consommation annuelle de fioul (litres)" : "Consommation annuelle de gaz (kWh)";
+
+  const blocConso = `
+    <span class="field-label">Type / âge de la chaudière</span>
+    ${optionCards("chaudiere", "chauffage.typeChaudiereKey", TYPES_CHAUDIERE, state.chauffage.typeChaudiereKey)}
+    <label class="field">
+      <span>${consoLabel}</span>
+      <input type="number" min="0" step="100" inputmode="numeric" data-bind="chauffage.conso" value="${state.chauffage.conso}" placeholder="ex. 18000" />
+      <small class="hint">💡 Elle figure sur votre facture annuelle — c'est la méthode la plus fiable.</small>
+    </label>`;
+
+  const blocLogement = `
+    <span class="field-label">Année de construction</span>
+    ${optionCards("epoque", "logement.epoqueKey", EPOQUES, state.logement.epoqueKey)}
+    <span class="field-label">Travaux d'isolation déjà réalisés <em>(optionnel)</em></span>
+    ${travauxCards(state.logement.travaux)}
+    <small class="hint">Chaque poste amélioré réduit les déperditions estimées.</small>`;
+
   return `
     <fieldset class="field">
       <legend>Énergie actuelle</legend>
@@ -158,16 +240,10 @@ function stepChauffage() {
       </div>
     </fieldset>
 
-    <label class="field">
-      <span>Type / âge de la chaudière</span>
-      <select data-bind="chauffage.typeChaudiereKey">${opt(TYPES_CHAUDIERE, state.chauffage.typeChaudiereKey)}</select>
-    </label>
+    <span class="field-label">Comment souhaitez-vous estimer vos besoins&nbsp;?</span>
+    ${optionCards("methode", "estimation.methode", METHODES, m, { rerender: true })}
 
-    <label class="field">
-      <span>${consoLabel} <em>(optionnel)</em></span>
-      <input type="number" min="0" step="100" data-bind="chauffage.conso" value="${state.chauffage.conso}" placeholder="ex. 18000" />
-      <small class="hint">💡 Renseignez votre conso pour une estimation plus précise — elle figure sur votre facture.</small>
-    </label>
+    ${m === "conso" ? blocConso : blocLogement}
   `;
 }
 
@@ -182,10 +258,8 @@ function stepBesoins() {
       </div>
     </fieldset>
 
-    <label class="field">
-      <span>Type d'émetteurs</span>
-      <select data-bind="besoins.emetteurKey">${opt(EMETTEURS, b.emetteurKey)}</select>
-    </label>
+    <span class="field-label">Type d'émetteurs</span>
+    ${optionCards("emetteur", "besoins.emetteurKey", EMETTEURS, b.emetteurKey)}
 
     <label class="field">
       <span>Nombre d'occupants : <strong id="occ-val">${b.nbOccupants}</strong></span>
@@ -205,23 +279,23 @@ function stepPreResultat(results) {
 function stepAides() {
   const a = state.aides;
   return `
-    <p class="lead-in">Estimez vos aides (MaPrimeRénov', CEE, bonus fioul).</p>
-    <label class="field">
-      <span>Localisation</span>
-      <select data-bind="aides.region">
-        <option value="hors_idf" ${a.region === "hors_idf" ? "selected" : ""}>Hors Île-de-France</option>
-        <option value="idf" ${a.region === "idf" ? "selected" : ""}>Île-de-France</option>
-      </select>
-    </label>
+    <p class="lead-in">Sélectionnez votre tranche de revenu — les seuils s'adaptent à votre foyer.</p>
+    <fieldset class="field">
+      <legend>Localisation</legend>
+      <div class="segmented">
+        <label><input type="radio" name="region" data-bind="aides.region" data-rerender value="hors_idf" ${a.region === "hors_idf" ? "checked" : ""}/> Hors Île-de-France</label>
+        <label><input type="radio" name="region" data-bind="aides.region" data-rerender value="idf" ${a.region === "idf" ? "checked" : ""}/> Île-de-France</label>
+      </div>
+    </fieldset>
+
     <label class="field">
       <span>Personnes au foyer : <strong id="foyer-val">${a.nbPersonnes}</strong></span>
-      <input type="range" min="1" max="8" step="1" data-bind="aides.nbPersonnes" data-type="number" data-live="#foyer-val" value="${a.nbPersonnes}" />
+      <input type="range" min="1" max="8" step="1" data-bind="aides.nbPersonnes" data-type="number" data-live="#foyer-val" data-rerender value="${a.nbPersonnes}" />
     </label>
-    <label class="field">
-      <span>Revenu fiscal de référence (€)</span>
-      <input type="number" min="0" step="100" data-bind="aides.rfr" value="${a.rfr}" placeholder="ex. 28000" />
-      <small class="hint">Ligne « Revenu fiscal de référence » de votre dernier avis d'imposition.</small>
-    </label>
+
+    <span class="field-label">Votre tranche de revenu fiscal de référence (RFR)</span>
+    ${profilCards()}
+    <small class="hint">Le RFR figure sur votre avis d'imposition. Choix indicatif, ajustable en rendez-vous.</small>
   `;
 }
 
@@ -258,7 +332,6 @@ function renderNav(step) {
 }
 
 function renderStep() {
-  normalize();
   const step = state.step;
   const meta = STEPS[step - 1];
   const needsResults = step === 4 || step === 6;
@@ -284,8 +357,7 @@ function renderStep() {
     <p class="datation">${renderDatation()}</p>
   `;
 
-  // Focus premier champ pour l'accessibilité (hors étapes résultat).
-  if (!needsResults) root.querySelector("input, select, button")?.focus?.({ preventScroll: true });
+  if (!needsResults) root.querySelector("input, button")?.focus?.({ preventScroll: true });
   if (step === 6 && !state.leadSubmitted) wireLeadForm(results);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -315,7 +387,9 @@ function onFieldEvent(e) {
     const target = root.querySelector(t.dataset.live);
     if (target) target.textContent = `${t.value}${t.dataset.unit || ""}`;
   }
-  if (t.dataset.rerender && e.type === "change") renderStep();
+  // Re-render différé : évite de détacher le DOM en plein clic (blur d'un champ
+  // texte → 'change' → re-render pendant que l'utilisateur clique sur « Suivant »).
+  if (t.dataset.rerender !== undefined && e.type === "change") setTimeout(renderStep, 0);
 }
 
 function showStepError(msg) {

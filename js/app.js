@@ -78,9 +78,8 @@ function compute() {
 
   const dim = dimensionnerPAC(dep.pDeperditionKW);
   const prix = estimerPrix({
-    pPacKW: dim.pPacKW,
+    pDeperditionKW: dep.pDeperditionKW,
     avecEcs: state.besoins.avecEcs,
-    emetteurKey: state.besoins.emetteurKey,
   });
 
   const aides = calculerAides({

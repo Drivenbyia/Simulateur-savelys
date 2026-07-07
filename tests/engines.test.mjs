@@ -16,7 +16,7 @@ import {
   setbackRatio,
 } from "../js/engines/deperditions.js";
 import { dimensionnerPAC, mapPuissanceCommerciale } from "../js/engines/dimensionnement.js";
-import { estimerPrix } from "../js/engines/prix.js";
+import { estimerPrix, interpolerPrix } from "../js/engines/prix.js";
 import { determinerProfil, calculerAides, seuilsPourFoyer } from "../js/engines/aides.js";
 import { calculerAmortissement, coutEnergieActuelle } from "../js/engines/amortissement.js";
 
@@ -113,14 +113,33 @@ test("dimensionnement PAC et mapping puissance commerciale", () => {
   assert.equal(mapPuissanceCommerciale(20), 16); // au-delà du max → plus grande dispo
 });
 
-/* --- Moteur 3 : prix --- */
-test("estimation prix : fonte HT + ECS → haut de fourchette", () => {
-  const p = estimerPrix({ pPacKW: 10.35, avecEcs: true, emetteurKey: "radiateurs_fonte_HT" });
-  assert.ok(approx(p.prixCentral, 18221.25, 1), `prixCentral ${p.prixCentral}`);
-  assert.ok(p.fourchette[0] < p.prixCentral && p.prixCentral < p.fourchette[1]);
+/* --- Moteur 3 : prix (grille réelle Savelys, interpolation par morceaux) --- */
+test("prix : points connus 4/8/15 kW, chauffage seul", () => {
+  assert.equal(interpolerPrix(4), 11000);
+  assert.equal(interpolerPrix(8), 15000);
+  assert.equal(interpolerPrix(15), 17000);
+});
 
-  const bas = estimerPrix({ pPacKW: 6, avecEcs: false, emetteurKey: "plancher_BT" });
-  assert.ok(bas.prixCentral < p.prixCentral); // plancher BT sans ECS toujours moins cher
+test("prix : interpolation par morceaux entre les points", () => {
+  // Segment [4,8] : pente 1000 €/kW → 6 kW = 11000 + 2*1000 = 13000
+  assert.ok(approx(interpolerPrix(6), 13000, 0.01), `6kW: ${interpolerPrix(6)}`);
+  // Segment [8,15] : pente (17000-15000)/7 ≈ 285.71 €/kW → 11 kW = 15000 + 3*285.71
+  assert.ok(approx(interpolerPrix(11), 15857.14, 0.1), `11kW: ${interpolerPrix(11)}`);
+});
+
+test("prix : clamp en dehors de [4,15] kW", () => {
+  assert.equal(interpolerPrix(2), 11000);
+  assert.equal(interpolerPrix(20), 17000);
+});
+
+test("estimerPrix : ECS ajoute le supplément fixe, fourchette encadre le central", () => {
+  const seul = estimerPrix({ pDeperditionKW: 8, avecEcs: false });
+  assert.equal(seul.prixCentral, 15000);
+  assert.ok(approx(seul.fourchette[0], 13800, 0.01));
+  assert.ok(approx(seul.fourchette[1], 16200, 0.01));
+
+  const avecEcs = estimerPrix({ pDeperditionKW: 8, avecEcs: true });
+  assert.equal(avecEcs.prixCentral, 17000); // +2000€ ECS
 });
 
 /* --- Moteur 5 : aides --- */

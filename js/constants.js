@@ -50,20 +50,20 @@ export const RATIOS_W_M2 = {
 export const COEF_DIM = 0.9; // ∈ [0.80, 1.00] ; l'appoint élec couvre les pointes
 export const PUISSANCES_COMMERCIALES = [6, 8, 11, 14, 16]; // kW
 
-/* --- Prix — Moteur 3 (€ TTC, pose comprise) --- */
-export const PRIX_BASE = {
-  avec_ecs: { low: 15000, high: 20000 },
-  sans_ecs: { low: 10000, high: 15000 },
-};
-export const PRIX_P_MIN = 6;
-export const PRIX_P_MAX = 16;
-export const W_PUISS = 0.55;
-export const W_EMET = 0.45;
-export const EMETTEUR_FACTOR = {
-  plancher_BT: 0.15,
-  radiateurs_BT: 0.4,
-  radiateurs_fonte_HT: 0.9,
-};
+/**
+ * Prix — Moteur 3 (€ TTC, pose comprise) : grille réelle Savelys.
+ * Fonction de la puissance de DÉPERDITION (kW), pas de la puissance commerciale.
+ * Relation non linéaire (pente 4→8 kW plus forte que 8→15 kW) → interpolation
+ * linéaire par morceaux sur ces points, clampée en dehors de [4,15] kW.
+ * Le type d'émetteur n'influence plus le prix (décision utilisateur) ; il reste
+ * utilisé pour le SCOP (Moteur 4).
+ */
+export const PRIX_PAR_DEPERDITION = [
+  { depKw: 4, prix: 11000 },
+  { depKw: 8, prix: 15000 },
+  { depKw: 15, prix: 17000 },
+];
+export const SUPPLEMENT_ECS = 2000; // € ajoutés si chauffage + eau chaude sanitaire
 export const PRIX_FOURCHETTE = 0.08; // ±8 % autour du prix central
 
 /* --- Amortissement — Moteur 4 --- */

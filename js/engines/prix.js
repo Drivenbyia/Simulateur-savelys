@@ -1,41 +1,43 @@
 /**
  * Moteur 3 — Estimation prix (fourchette indicative, non contractuelle).
  *
- * Logique : plus de puissance → prix plus haut ; radiateurs fonte (haute
- * température) → PAC HT plus chère → haut de fourchette.
+ * Grille réelle Savelys : prix fonction de la puissance de déperdition (kW),
+ * interpolée linéairement par morceaux entre les points connus, + supplément
+ * fixe si chauffage + eau chaude sanitaire (ECS).
  * Fourchette affichée = prix central ± 8 %.
  */
 
-import {
-  PRIX_BASE,
-  PRIX_P_MIN,
-  PRIX_P_MAX,
-  W_PUISS,
-  W_EMET,
-  EMETTEUR_FACTOR,
-  PRIX_FOURCHETTE,
-} from "../constants.js";
+import { PRIX_PAR_DEPERDITION, SUPPLEMENT_ECS, PRIX_FOURCHETTE } from "../constants.js";
 
-function clamp(x, min, max) {
-  return Math.min(Math.max(x, min), max);
+/**
+ * Interpolation linéaire par morceaux sur une table de points {depKw, prix}
+ * triée par depKw croissant. Clampe en dehors des bornes (retient la valeur
+ * du point extrême le plus proche).
+ */
+export function interpolerPrix(depKw, points = PRIX_PAR_DEPERDITION) {
+  const x = Number(depKw) || 0;
+  if (x <= points[0].depKw) return points[0].prix;
+  const last = points[points.length - 1];
+  if (x >= last.depKw) return last.prix;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    if (x >= a.depKw && x <= b.depKw) {
+      const t = (x - a.depKw) / (b.depKw - a.depKw);
+      return a.prix + t * (b.prix - a.prix);
+    }
+  }
+  return last.prix;
 }
 
 /**
- * @param {{ pPacKW:number, avecEcs:boolean, emetteurKey:string }} input
- * @returns {{ prixCentral:number, fourchette:[number,number], position:number }}
+ * @param {{ pDeperditionKW:number, avecEcs:boolean }} input
+ * @returns {{ prixCentral:number, fourchette:[number,number] }}
  */
-export function estimerPrix({ pPacKW, avecEcs, emetteurKey }) {
-  const base = avecEcs ? PRIX_BASE.avec_ecs : PRIX_BASE.sans_ecs;
-
-  const puissNorm = clamp(
-    ((Number(pPacKW) || 0) - PRIX_P_MIN) / (PRIX_P_MAX - PRIX_P_MIN),
-    0,
-    1
-  );
-  const emetteurFactor = EMETTEUR_FACTOR[emetteurKey] ?? 0.4;
-
-  const position = W_PUISS * puissNorm + W_EMET * emetteurFactor;
-  const prixCentral = base.low + position * (base.high - base.low);
+export function estimerPrix({ pDeperditionKW, avecEcs }) {
+  const base = interpolerPrix(pDeperditionKW, PRIX_PAR_DEPERDITION);
+  const prixCentral = base + (avecEcs ? SUPPLEMENT_ECS : 0);
 
   return {
     prixCentral,
@@ -43,6 +45,5 @@ export function estimerPrix({ pPacKW, avecEcs, emetteurKey }) {
       prixCentral * (1 - PRIX_FOURCHETTE),
       prixCentral * (1 + PRIX_FOURCHETTE),
     ],
-    position,
   };
 }

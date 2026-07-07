@@ -1,26 +1,27 @@
 /* =============================================================================
    Simulateur PAC Savelys — design system (clair, aéré, rassurant).
-   Vert Savelys confirmé depuis savelys.fr (#265B2F). Police : fallback Inter
-   (extraction de la police exacte du site non disponible).
+   Tokens extraits du CSS compilé officiel de savelys.fr (variables --color-brand-*,
+   --app-color-*, --app-font-family-base) : vert #265B2F, hover #1E4825, police
+   Urbanist, succès #19A546.
    ============================================================================= */
 :root {
-  --sav-primary: #265B2F;        /* CTA principal (vert Savelys confirmé) */
-  --sav-primary-dark: #1c4423;   /* hover / actif */
+  --sav-primary: #265B2F;        /* --color-brand-500 (CTA principal) */
+  --sav-primary-dark: #1E4825;   /* --color-brand-600 (hover / actif) */
   --sav-accent: #0f6fb3;         /* accent secondaire (placeholder bleu) */
   --sav-bg: #f4f7f6;             /* fond de page, clair et aéré */
   --sav-surface: #ffffff;        /* cartes */
   --sav-text: #16211d;           /* texte principal */
   --sav-muted: #5c6b66;          /* texte secondaire */
-  --sav-success: #2e7d32;        /* économies & aides */
-  --sav-warn: #b26a00;
-  --sav-error: #c0392b;
+  --sav-success: #19A546;        /* --app-color-success (économies & aides) */
+  --sav-warn: #E47800;           /* --app-color-warning */
+  --sav-error: #CC0033;          /* --app-color-error */
   --sav-border: #e3e9e6;
 
   --radius: 16px;
   --radius-sm: 10px;
   --shadow: 0 6px 24px rgba(0, 0, 0, .08);
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, .06);
-  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font: "Urbanist", "Helvetica Neue", helvetica, sans-serif;
 
   /* Couleurs des profils ANAH */
   --anah-bleu: #2f80ed;

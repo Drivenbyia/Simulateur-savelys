@@ -5,7 +5,8 @@
  * saisie des coordonnées + consentement explicite. Anonyme avant ce point.
  *
  * Version MVP : l'envoi est SIMULÉ (log console + confirmation). Un seul point
- * d'accroche `envoyerLead()` à rebrancher plus tard (Formspree / Netlify Forms / CRM).
+ * d'accroche `envoyerLead()` à rebrancher plus tard vers la cible d'intégration
+ * retenue : Salesforce Web-to-Lead (CRM agence Savelys).
  */
 
 export function renderLeadForm(state) {
@@ -119,7 +120,14 @@ export function buildLeadPayload(state, results) {
 
 /**
  * "Envoi" du lead — SIMULÉ pour le MVP.
- * Point unique à rebrancher plus tard vers Formspree / Netlify Forms / CRM.
+ *
+ * Cible d'intégration retenue : Salesforce Web-to-Lead. À terme, ce point remplacera
+ * le log console par un POST HTML classique (form-urlencoded) vers
+ * `https://webto.salesforce.com/servlet/servlet.WebToLead?encoding=UTF-8`, avec
+ * l'`oid` de l'org Salesforce Savelys + les champs du lead mappés aux champs
+ * standard/custom du formulaire Web-to-Lead (nom, prénom, e-mail/téléphone, code
+ * postal, et les données techniques de `buildLeadPayload` en champs custom).
+ * Reste à brancher dès que l'`oid`/endpoint Salesforce sera fourni par Savelys.
  */
 export async function envoyerLead(payload) {
   // eslint-disable-next-line no-console

@@ -1,26 +1,37 @@
 /**
- * Correspondance code postal → zone climatique (H1 / H2 / H3).
+ * Correspondance code postal → sous-zone climatique RT2012 (H1a…H3).
  *
- * On mappe par département (2 premiers chiffres du code postal). La Corse (20x)
- * est traitée à part. Tout département non listé en H2/H3 retombe en H1.
- *
- * ⚠️ Zonage PROVISOIRE et simplifié (3 zones). À réaligner sur la table exacte
- * du Toshiba V17 (source de vérité) — cf. cahier §2.
+ * Mapping des 96 départements métropolitains fourni par PacCloser (valeurs "plaine").
+ * La Corse (codes postaux 20xxx) est traitée à part → H3.
+ * Département absent → null (le calcul retombe sur CLIMAT_DEFAUT).
  */
 
-// Littoral méditerranéen — zone la plus douce.
-const DEPTS_H3 = new Set(["06", "11", "13", "30", "34", "66", "83"]);
-
-// Façade atlantique + Sud-Ouest (dont Dordogne 24 et Lot-et-Garonne 47, cf. cahier).
-const DEPTS_H2 = new Set([
-  "14", "16", "17", "22", "24", "27", "29", "33", "35", "40",
-  "44", "47", "50", "53", "56", "61", "64", "72", "76", "79",
-  "85", "86",
-]);
+export const DEPT_TO_ZONE = {
+  "01": "H1c", "02": "H1a", "03": "H1c", "04": "H2d", "05": "H1c",
+  "06": "H3", "07": "H2d", "08": "H1b", "09": "H2c", "10": "H1b",
+  "11": "H3", "12": "H2c", "13": "H3", "14": "H2a", "15": "H1c",
+  "16": "H2b", "17": "H2b", "18": "H2b", "19": "H1c",
+  "2A": "H3", "2B": "H3",
+  "21": "H1b", "22": "H2a", "23": "H1c", "24": "H2c", "25": "H1b",
+  "26": "H2d", "27": "H1a", "28": "H1a", "29": "H2a", "30": "H3",
+  "31": "H2c", "32": "H2c", "33": "H2c", "34": "H3", "35": "H2a",
+  "36": "H2b", "37": "H2b", "38": "H1c", "39": "H1b", "40": "H2c",
+  "41": "H2b", "42": "H1c", "43": "H1c", "44": "H2b", "45": "H2b",
+  "46": "H2c", "47": "H2c", "48": "H1c", "49": "H2b", "50": "H2a",
+  "51": "H1a", "52": "H1b", "53": "H2b", "54": "H1b", "55": "H1b",
+  "56": "H2a", "57": "H1b", "58": "H1b", "59": "H1a", "60": "H1a",
+  "61": "H1a", "62": "H1a", "63": "H1c", "64": "H2c", "65": "H2c",
+  "66": "H3", "67": "H1b", "68": "H1b", "69": "H1c", "70": "H1b",
+  "71": "H1c", "72": "H2b", "73": "H1c", "74": "H1c", "75": "H1a",
+  "76": "H1a", "77": "H1a", "78": "H1a", "79": "H2b", "80": "H1a",
+  "81": "H2c", "82": "H2c", "83": "H3", "84": "H2d", "85": "H2b",
+  "86": "H2b", "87": "H1c", "88": "H1b", "89": "H1b", "90": "H1b",
+  "91": "H1a", "92": "H1a", "93": "H1a", "94": "H1a", "95": "H1a",
+};
 
 /**
  * @param {string} codePostal - code postal français (5 chiffres, ex. "24000").
- * @returns {"H1"|"H2"|"H3"|null} code de zone, ou null si code postal invalide.
+ * @returns {string|null} sous-zone RT2012 (ex. "H2c"), ou null si invalide/inconnu.
  */
 export function getZoneFromPostal(codePostal) {
   const cp = String(codePostal || "").trim();
@@ -29,8 +40,5 @@ export function getZoneFromPostal(codePostal) {
   // Corse (2A / 2B) : codes postaux 20xxx → climat méditerranéen.
   if (cp.startsWith("20")) return "H3";
 
-  const dept = cp.slice(0, 2);
-  if (DEPTS_H3.has(dept)) return "H3";
-  if (DEPTS_H2.has(dept)) return "H2";
-  return "H1";
+  return DEPT_TO_ZONE[cp.slice(0, 2)] || null;
 }

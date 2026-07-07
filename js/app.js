@@ -5,7 +5,7 @@
  */
 
 import { rendementChaudiere, PCI_FIOUL, T_INT, E_ECS_UTILE } from "./constants.js";
-import { getZone, CLIMAT_DEFAUT } from "./data/climate.js";
+import { getZone, CLIMAT_DEFAUT, zoneCoarse } from "./data/climate.js";
 import { getZoneFromPostal } from "./data/postal-zones.js";
 import { calculerDeperditions } from "./engines/deperditions.js";
 import { dimensionnerPAC } from "./engines/dimensionnement.js";
@@ -89,7 +89,7 @@ function compute() {
     region: state.aides.region,
     energieActuelle: state.chauffage.energie,
     prixCentral: prix.prixCentral,
-    zone: zoneCode,
+    zone: zoneCoarse(zoneCode), // grille CEE en zones grossières H1/H2/H3
     surface: state.logement.surface,
   });
 

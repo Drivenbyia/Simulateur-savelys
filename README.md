@@ -59,18 +59,24 @@ de consentement explicite. L'envoi est **simulé** pour l'instant (log console +
 lead complet) — un seul point à rebrancher : `envoyerLead()` dans `js/ui/lead.js`
 (Formspree / Netlify Forms / CRM).
 
+## Données confirmées (itération 2)
+
+- **Seuils RFR ANAH** (`js/data/aides-baremes.js`) : barème officiel ANAH au
+  1er janvier 2026 (brochure officielle « Les aides financières en 2026 »),
+  IDF + hors-IDF (la table `hors_idf` couvre aussi l'Outre-mer).
+- **Zones climatiques / DJU** (`js/data/climate.js`, `js/data/postal-zones.js`) :
+  8 sous-zones RT2012 (H1a…H3) et mapping complet des 96 départements
+  métropolitains, d'après la table de dimensionnement PacCloser.
+- **Design system** (`styles/main.css`) : vert Savelys confirmé `#265B2F`
+  (source : savelys.fr).
+
 ## ⚠️ Données à valider avant mise en production
 
-Ces valeurs sont des repères datés (juillet 2026) à confirmer officiellement :
-
-- **Seuils RFR ANAH** (`js/data/aides-baremes.js`) : à recouper avec
-  `france-renov.gouv.fr/bareme`.
 - **Constantes énergie** (`js/constants.js`, `MAJ_TARIFS`) : prix gaz/fioul/élec.
-- **Zones climatiques / DJU** (`js/data/climate.js`) : valeurs représentatives
-  alignées PacCloser ; le mapping fin des 96 départements → sous-zone RT2012 (H1a…H3)
-  reste à intégrer.
-- **Design system** (`styles/main.css`) : les tokens `--sav-*` sont des **placeholders**
-  — à remplacer par les vrais hex + police Savelys (extraction depuis savelys.fr).
+- **Barème CEE / Coup de pouce** (`js/data/aides-baremes.js`) : barème réel du
+  partenaire obligé Savelys.
+- **Cible d'intégration du lead** (`js/ui/lead.js`) : Salesforce Web-to-Lead,
+  à brancher quand l'`oid`/endpoint de l'org sera fourni.
 
 ## Points ouverts
 

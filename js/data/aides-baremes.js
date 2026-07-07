@@ -1,12 +1,12 @@
 /**
- * Barèmes des aides — Simulateur PAC Savelys (repères 2026).
+ * Barèmes des aides — Simulateur PAC Savelys.
  *
- * ⚠️ ANTI-HALLUCINATION : ces barèmes sont susceptibles d'évoluer. Ils doivent être
- * VÉRIFIÉS sur les sources officielles avant mise en production :
- *   - Seuils RFR ANAH : https://france-renov.gouv.fr/bareme
- *   - CEE / Coup de pouce : barème réel du partenaire obligé Savelys.
- * Table RFR ci-dessous = barème publié 2026 (cohérent avec l'ancre du cahier :
- * Bleu / 2 pers / hors-IDF = 25 393 €).
+ * Seuils RFR ANAH : barème officiel ANAH au 1er janvier 2026 (vérifié conforme à la
+ * brochure officielle « Les aides financières en 2026 », p.8). La table `hors_idf`
+ * s'applique aussi à l'Outre-mer.
+ *
+ * ⚠️ À VALIDER avant mise en production : le barème CEE / Coup de pouce (partenaire
+ * obligé Savelys) et les tarifs énergie (`constants.js`), qui restent des repères.
  */
 
 export const BAREME_DATE = "2026";

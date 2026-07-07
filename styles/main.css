@@ -1,11 +1,11 @@
 /* =============================================================================
    Simulateur PAC Savelys — design system (clair, aéré, rassurant).
-   ⚠️ TOKENS À REMPLACER par les vrais hex/police Savelys (extraction depuis
-   savelys.fr — cf. cahier §4). Valeurs ci-dessous = placeholders plausibles.
+   Vert Savelys confirmé depuis savelys.fr (#265B2F). Police : fallback Inter
+   (extraction de la police exacte du site non disponible).
    ============================================================================= */
 :root {
-  --sav-primary: #0a7d5a;        /* CTA principal (placeholder vert Savelys) */
-  --sav-primary-dark: #075f45;   /* hover / actif */
+  --sav-primary: #265B2F;        /* CTA principal (vert Savelys confirmé) */
+  --sav-primary-dark: #1c4423;   /* hover / actif */
   --sav-accent: #0f6fb3;         /* accent secondaire (placeholder bleu) */
   --sav-bg: #f4f7f6;             /* fond de page, clair et aéré */
   --sav-surface: #ffffff;        /* cartes */
@@ -96,7 +96,7 @@ input[type="text"], input[type="number"], input[type="email"], input[type="tel"]
   background: var(--sav-surface); border: 1.5px solid var(--sav-border);
   border-radius: var(--radius-sm); outline: none;
 }
-input:focus, select:focus { border-color: var(--sav-primary); box-shadow: 0 0 0 3px rgba(10, 125, 90, .15); }
+input:focus, select:focus { border-color: var(--sav-primary); box-shadow: 0 0 0 3px rgba(38, 91, 47, .15); }
 .hint { display: block; color: var(--sav-muted); font-size: .8rem; margin-top: .35rem; }
 
 input[type="range"] { width: 100%; accent-color: var(--sav-primary); height: 1.6rem; }
@@ -110,7 +110,7 @@ input[type="range"] { width: 100%; accent-color: var(--sav-primary); height: 1.6
 }
 .segmented input { accent-color: var(--sav-primary); }
 .segmented label:has(input:checked) {
-  border-color: var(--sav-primary); background: rgba(10, 125, 90, .06); font-weight: 600;
+  border-color: var(--sav-primary); background: rgba(38, 91, 47, .06); font-weight: 600;
 }
 
 /* --- Boutons --- */
@@ -136,7 +136,7 @@ input[type="range"] { width: 100%; accent-color: var(--sav-primary); height: 1.6
 .stat__value { display: block; font-size: 1.5rem; font-weight: 800; margin-top: .15rem; }
 .stat__unit { font-size: .9rem; font-weight: 600; color: var(--sav-muted); }
 .stat__hint { display: block; color: var(--sav-muted); font-size: .75rem; margin-top: .1rem; }
-.stat--accent { border-color: var(--sav-primary); background: rgba(10, 125, 90, .06); }
+.stat--accent { border-color: var(--sav-primary); background: rgba(38, 91, 47, .06); }
 .stat--success .stat__value { color: var(--sav-success); }
 
 .breakdown { list-style: none; padding: 0; margin: .6rem 0 .2rem; }
@@ -161,7 +161,7 @@ input[type="range"] { width: 100%; accent-color: var(--sav-primary); height: 1.6
 /* --- Lead / gate --- */
 .teaser { background: rgba(15, 111, 179, .06); border: 1px solid var(--sav-border); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1rem; }
 .teaser__blur { margin-top: .5rem; font-weight: 800; color: transparent; text-shadow: 0 0 12px rgba(0,0,0,.45); user-select: none; }
-.lead__hook { background: rgba(10,125,90,.06); padding: .7rem .9rem; border-radius: var(--radius-sm); margin: 0 0 1rem; }
+.lead__hook { background: rgba(38, 91, 47, .06); padding: .7rem .9rem; border-radius: var(--radius-sm); margin: 0 0 1rem; }
 .consent { display: flex; gap: .6rem; align-items: flex-start; font-size: .88rem; margin: .4rem 0 1rem; }
 .consent input { margin-top: .2rem; accent-color: var(--sav-primary); }
 .lead__legal { text-align: center; }

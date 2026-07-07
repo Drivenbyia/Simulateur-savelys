@@ -7,7 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { getZoneFromPostal } from "../js/data/postal-zones.js";
-import { getZone } from "../js/data/climate.js";
+import { getZone, zoneCoarse } from "../js/data/climate.js";
 import {
   calculerDeperditions,
   deperditionsVoieA,
@@ -24,13 +24,19 @@ const approx = (a, b, tol = 0.5) => Math.abs(a - b) <= tol;
 
 /* --- Zones climatiques --- */
 test("code postal → zone climatique", () => {
-  assert.equal(getZoneFromPostal("24000"), "H2"); // Dordogne
-  assert.equal(getZoneFromPostal("47000"), "H2"); // Lot-et-Garonne
+  assert.equal(getZoneFromPostal("24000"), "H2c"); // Dordogne
+  assert.equal(getZoneFromPostal("47000"), "H2c"); // Lot-et-Garonne
   assert.equal(getZoneFromPostal("13000"), "H3"); // Marseille
   assert.equal(getZoneFromPostal("20000"), "H3"); // Corse
-  assert.equal(getZoneFromPostal("75001"), "H1"); // Paris → défaut H1
+  assert.equal(getZoneFromPostal("75001"), "H1a"); // Paris
   assert.equal(getZoneFromPostal("abc"), null);
   assert.equal(getZoneFromPostal("123"), null);
+});
+
+test("zoneCoarse : sous-zone RT2012 → zone grossière H1/H2/H3", () => {
+  assert.equal(zoneCoarse("H2c"), "H2");
+  assert.equal(zoneCoarse("H1a"), "H1");
+  assert.equal(zoneCoarse("H3"), "H3");
 });
 
 /* --- Moteur 1 : déperditions --- */
@@ -40,7 +46,7 @@ test("conso fioul convertie en kWh via PCI", () => {
 });
 
 test("voie A (garde-fou PacCloser) : gaz standard avec correction PCI", () => {
-  const zone = getZone("H1"); // dju 2580, tExtBase -7
+  const zone = getZone("H1a"); // dju 2580, tExtBase -7
   const a = deperditionsVoieA({
     energie: "gaz",
     conso: 20000,
@@ -67,7 +73,7 @@ test("setbackRatio : réduit sous 1 avec un réduit nocturne", () => {
 });
 
 test("voie B : surface × ratio / 1000", () => {
-  const zone = getZone("H1");
+  const zone = getZone("H1a");
   const b = deperditionsVoieB({
     surface: 100,
     epoqueKey: "avant_1975", // ratio 115
@@ -81,7 +87,7 @@ test("voie B : surface × ratio / 1000", () => {
 });
 
 test("croisement A/B : on retient A et on lève l'avertissement si écart > 30 %", () => {
-  const zone = getZone("H1");
+  const zone = getZone("H1a");
   const res = calculerDeperditions({
     energie: "gaz",
     conso: 20000,

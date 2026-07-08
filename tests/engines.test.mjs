@@ -17,7 +17,8 @@ import {
   coefG,
 } from "../js/engines/deperditions.js";
 import { dimensionnerPAC, mapPuissanceCommerciale } from "../js/engines/dimensionnement.js";
-import { estimerPrix, puissanceCommercialeChauffage } from "../js/engines/prix.js";
+import { estimerPrix } from "../js/engines/prix.js";
+import { facteurCapacitePAC } from "../js/constants.js";
 import { determinerProfil, calculerAides, seuilsPourFoyer, ceeSavelys } from "../js/engines/aides.js";
 import { calculerAmortissement, coutEnergieActuelle } from "../js/engines/amortissement.js";
 
@@ -144,34 +145,34 @@ test("croisement A/B : on retient A et on lève l'avertissement si écart > 30 %
   assert.equal(res.coherence, "incoherent");
 });
 
-/* --- Moteur 2 : dimensionnement --- */
-test("dimensionnement PAC et mapping puissance commerciale", () => {
-  const d = dimensionnerPAC(11.5);
-  assert.ok(approx(d.pPacKW, 10.35), `pPac ${d.pPacKW}`);
-  assert.equal(d.pCommercialeKW, 11);
-  assert.equal(mapPuissanceCommerciale(20), 16); // au-delà du max → plus grande dispo
+/* --- Moteur 2 : dimensionnement (déclassement au froid) --- */
+test("facteur de capacité PAC selon la T° de base", () => {
+  assert.equal(facteurCapacitePAC(7), 1); // au point de mesure
+  assert.ok(approx(facteurCapacitePAC(-5), 0.664, 0.001)); // 1 − 0.028×12
+  assert.equal(facteurCapacitePAC(-40), 0.5); // plancher
+});
+
+test("dimensionnement : ex. 6 kW déperdition à −5°C → PAC 8 kW (pas 6)", () => {
+  const d = dimensionnerPAC(6, { avecEcs: false, tExtBase: -5 });
+  // nominal requis = 6×0.9 / 0.664 ≈ 8.1 kW → commercial 8 kW
+  assert.equal(d.pCommercialeKW, 8);
+  assert.ok(d.pChauffageNominalKW > 6, `nominal ${d.pChauffageNominalKW}`);
 });
 
 test("dimensionnement : supplément ECS selon la taille du foyer (étude 2026)", () => {
-  const sans = dimensionnerPAC(10, { avecEcs: false, nbPersonnes: 4 });
-  const avec = dimensionnerPAC(10, { avecEcs: true, nbPersonnes: 4 });
+  const sans = dimensionnerPAC(10, { avecEcs: false, nbPersonnes: 4, tExtBase: -7 });
+  const avec = dimensionnerPAC(10, { avecEcs: true, nbPersonnes: 4, tExtBase: -7 });
   assert.equal(sans.suppEcsKW, 0);
   assert.equal(avec.suppEcsKW, 1.75); // foyer 3-4 personnes
-  assert.ok(approx(avec.pPacKW, 10.75, 0.001)); // 10×0.9 + 1.75
+  assert.ok(avec.pPacKW > sans.pPacKW); // ECS ajoute de la puissance
   assert.equal(dimensionnerPAC(10, { avecEcs: true, nbPersonnes: 6 }).suppEcsKW, 2.75);
   assert.equal(dimensionnerPAC(10, { avecEcs: true, nbPersonnes: 2 }).suppEcsKW, 1);
+  assert.equal(mapPuissanceCommerciale(20), 16);
 });
 
 /* --- Moteur 3 : prix (modèle étude 2026 : matériel + accessoires + pose, TVA 5,5 %) --- */
-test("prix : puissance de chauffage retenue depuis la déperdition", () => {
-  assert.equal(puissanceCommercialeChauffage(11.5), 11); // 11.5×0.9=10.35 → 11 kW
-  assert.equal(puissanceCommercialeChauffage(5), 6);
-  assert.equal(puissanceCommercialeChauffage(20), 16);
-});
-
-test("prix : cas de référence (11,5 kW, fonte HT, province) ≈ 16 000 € TTC central", () => {
-  const p = estimerPrix({ pDeperditionKW: 11.5, emetteurKey: "radiateurs_fonte_HT" });
-  assert.equal(p.puissanceKW, 11);
+test("prix : cas de référence (11 kW commercial, fonte HT, province) ≈ 16 000 € TTC", () => {
+  const p = estimerPrix({ puissanceKW: 11, emetteurKey: "radiateurs_fonte_HT" });
   // HT 11 kW : matériel 11000-13500 + acc 650-1200 + pose 1500-2500, ×1,055
   assert.ok(approx(p.fourchette[0], 13873, 1), `bas ${p.fourchette[0]}`);
   assert.ok(approx(p.fourchette[1], 18147, 1), `haut ${p.fourchette[1]}`);
@@ -179,12 +180,12 @@ test("prix : cas de référence (11,5 kW, fonte HT, province) ≈ 16 000 € TTC
 });
 
 test("prix : émetteur BT moins cher que fonte HT ; IDF plus cher que province", () => {
-  const bt = estimerPrix({ pDeperditionKW: 11.5, emetteurKey: "radiateurs_BT" });
-  const ht = estimerPrix({ pDeperditionKW: 11.5, emetteurKey: "radiateurs_fonte_HT" });
+  const bt = estimerPrix({ puissanceKW: 11, emetteurKey: "radiateurs_BT" });
+  const ht = estimerPrix({ puissanceKW: 11, emetteurKey: "radiateurs_fonte_HT" });
   assert.ok(bt.prixCentral < ht.prixCentral);
 
-  const prov = estimerPrix({ pDeperditionKW: 8, emetteurKey: "radiateurs_BT" });
-  const idf = estimerPrix({ pDeperditionKW: 8, emetteurKey: "radiateurs_BT", idf: true });
+  const prov = estimerPrix({ puissanceKW: 8, emetteurKey: "radiateurs_BT" });
+  const idf = estimerPrix({ puissanceKW: 8, emetteurKey: "radiateurs_BT", idf: true });
   assert.ok(idf.prixCentral > prov.prixCentral);
   assert.ok(idf.fourchette[0] < idf.fourchette[1]);
 });

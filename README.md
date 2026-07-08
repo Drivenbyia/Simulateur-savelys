@@ -51,6 +51,12 @@ sa voie « logement » utilise la méthode volumique de l'étude 2026 (P = G × 
 coefficient G par période RT 1974 → RE 2020, glissé selon les travaux d'isolation ADEME).
 Énergies gérées : **gaz de ville, fioul, propane** (tables PacCloser §0).
 
+Le **Moteur 2 (dimensionnement)** tient compte du **déclassement au froid** : la puissance
+nominale d'une PAC est donnée à +7°C ; à la température de base régionale elle chute
+(~2,8 %/°C, ex. capacité 66 % à −5°C). La puissance nominale requise est donc
+`déperdition × 0,9 / facteur(T_base)`, + supplément ECS. Une même déperdition impose donc
+une PAC plus puissante (et plus chère) en zone froide — comme sur le terrain.
+
 Le **Moteur 3 (prix)** applique le modèle de l'étude 2026 : matériel PAC air/eau Duo +
 accessoires (pot à boue, ballon tampon) + main-d'œuvre régionalisée (majoration IDF),
 en HT puis TVA 5,5 % → **fourchette** bas/haut. L'émetteur (BT vs fonte HT) et la puissance

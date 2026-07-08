@@ -53,7 +53,7 @@ export function renderPreResultat(r) {
       <div class="stat">
         <span class="stat__label">Puissance PAC recommandée</span>
         <span class="stat__value">${r.dim.pCommercialeKW} kW</span>
-        <span class="stat__hint">calcul ${fmtKw(r.dim.pPacKW)}</span>
+        <span class="stat__hint">déclassement inclus à ${nf0.format(r.tExtBase)}°C (capacité ${Math.round(r.dim.factor * 100)}%)</span>
       </div>
       <div class="stat stat--accent">
         <span class="stat__label">Budget estimatif (pose comprise)</span>

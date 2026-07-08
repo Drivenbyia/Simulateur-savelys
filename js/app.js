@@ -112,9 +112,10 @@ function compute() {
   const dim = dimensionnerPAC(dep.pDeperditionKW, {
     avecEcs: state.besoins.avecEcs,
     nbPersonnes: state.besoins.nbOccupants,
+    tExtBase, // déclassement de la PAC à la température de base
   });
   const prix = estimerPrix({
-    pDeperditionKW: dep.pDeperditionKW,
+    puissanceKW: dim.pCommercialeChauffageKW,
     emetteurKey: state.besoins.emetteurKey,
     idf,
   });
@@ -151,7 +152,7 @@ function compute() {
     aidesTotales: aides.aidesTotales,
   });
 
-  return { zone, zoneCode, dep, dim, prix, aides, amort };
+  return { zone, zoneCode, tExtBase, dep, dim, prix, aides, amort };
 }
 
 /* ---------------------------------------------------------- templates --- */

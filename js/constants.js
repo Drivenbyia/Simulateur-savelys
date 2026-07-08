@@ -130,7 +130,26 @@ export const POIDS_ISOLATION = {
 
 /* --- Dimensionnement PAC — Moteur 2 --- */
 export const COEF_DIM = 0.9; // ∈ [0.80, 1.00] ; l'appoint élec couvre les pointes
-export const PUISSANCES_COMMERCIALES = [6, 8, 11, 14, 16]; // kW
+export const PUISSANCES_COMMERCIALES = [6, 8, 11, 14, 16]; // kW (puissances nominales à +7°C)
+
+/**
+ * Déclassement de la PAC air/eau au froid : la puissance NOMINALE est mesurée à
+ * +7°C (EN 14511). À la température de base, la PAC fournit moins (ex. terrain :
+ * une 6 kW nominale ≈ 4 kW à −5°C → facteur ≈ 0,66). On modélise une perte
+ * linéaire par °C sous +7°C, avec un plancher (au-delà, l'appoint électrique prend
+ * le relais). Il faut donc surdimensionner la puissance nominale pour couvrir la
+ * déperdition à la température de base — ce qui impacte aussi le prix.
+ */
+export const T_REF_PAC = 7; // °C — point de mesure de la puissance nominale
+export const PAC_DERATING_PAR_C = 0.028; // perte de capacité par °C sous +7°C (~2,8 %/°C)
+export const PAC_FACTOR_MIN = 0.5; // plancher de capacité au grand froid
+
+/** Facteur de capacité de la PAC (part de la puissance nominale) à la T° de base. */
+export function facteurCapacitePAC(tExtBase) {
+  const t = Number.isFinite(tExtBase) ? tExtBase : T_REF_PAC;
+  const drop = T_REF_PAC - t;
+  return Math.min(1, Math.max(PAC_FACTOR_MIN, 1 - PAC_DERATING_PAR_C * drop));
+}
 
 /**
  * Supplément de puissance ECS (PAC "Duo") selon la taille du foyer — étude 2026 :

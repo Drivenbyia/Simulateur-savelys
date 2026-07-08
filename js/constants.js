@@ -51,6 +51,18 @@ export function pciEnergie(energie) {
   return ENERGIES[energie]?.pci ?? 1;
 }
 
+/**
+ * Convertit un montant de facture ANNUELLE (€, abonnement inclus) en quantité
+ * physique achetée (kWh gaz, litres fioul, kg propane) — pour les clients qui
+ * connaissent leur budget mais pas leur consommation en kWh/L/kg.
+ */
+export function factureAnnuelleToConso(energie, montantAnnuelEuros) {
+  const cfg = ENERGIES[energie];
+  if (!cfg || !(Number(montantAnnuelEuros) > 0)) return 0;
+  const kwhAchetes = Math.max(0, (Number(montantAnnuelEuros) - (cfg.abonnement || 0)) / cfg.prixKwh);
+  return kwhAchetes / cfg.pci;
+}
+
 /* --- Électricité (PAC) --- */
 export const PRIX_ELEC = 0.194; // €/kWh TTC (TRV)
 export const ELEC_INFLATION = 0.025; // inflation élec par défaut (2,5 %/an)

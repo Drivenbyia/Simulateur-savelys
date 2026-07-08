@@ -12,6 +12,7 @@ import {
   E_ECS_UTILE,
   HAUTEUR_SOUS_PLAFOND_DEFAUT,
   DEPTS_IDF,
+  factureAnnuelleToConso,
 } from "./constants.js";
 import { getZone, CLIMAT_DEFAUT, zoneCoarse } from "./data/climate.js";
 import { getZoneFromPostal, getTbaseFromPostal } from "./data/postal-zones.js";
@@ -44,7 +45,7 @@ const state = {
     epoqueKey: "de_1989_2000",
     travaux: { toiture_combles: false, murs: false, fenetres: false, plancher_bas: false },
   },
-  chauffage: { energie: "gaz", typeChaudiereKey: "standard", conso: "" },
+  chauffage: { energie: "gaz", typeChaudiereKey: "standard", conso: "", consoUnite: "quantite" },
   besoins: { avecEcs: true, emetteurKey: "radiateurs_BT", nbOccupants: 3 },
   aides: { region: "hors_idf", nbPersonnes: 3, profil: null },
   lead: { prenom: "", nom: "", canal: "email", email: "", tel: "", codePostal: "", consent: false },
@@ -81,6 +82,20 @@ const METHODES = [
   ["logement", "Par mon logement", "si je ne connais pas ma conso"],
 ];
 
+/**
+ * Consommation saisie par l'utilisateur, ramenée à l'unité physique attendue
+ * par les moteurs (kWh gaz / litres fioul / kg propane), quelle que soit la
+ * façon dont elle a été saisie (quantité, facture annuelle ou mensualité).
+ */
+function consoNativeUnite() {
+  const { energie, conso, consoUnite } = state.chauffage;
+  const montant = Number(conso) || 0;
+  if (!montant) return 0;
+  if (consoUnite === "annuel") return factureAnnuelleToConso(energie, montant);
+  if (consoUnite === "mensuel") return factureAnnuelleToConso(energie, montant * 12);
+  return montant;
+}
+
 /* ------------------------------------------------------------- calcul --- */
 function compute() {
   const zoneCode = getZoneFromPostal(state.logement.codePostal);
@@ -102,7 +117,7 @@ function compute() {
     tInt: T_INT,
   };
   if (state.estimation.methode === "conso") {
-    depInput.conso = state.chauffage.conso; // voie A (facture)
+    depInput.conso = consoNativeUnite(); // voie A (facture)
   } else {
     depInput.epoqueKey = state.logement.epoqueKey; // voie B (logement + travaux)
     depInput.travaux = state.logement.travaux;
@@ -132,7 +147,7 @@ function compute() {
   });
 
   // Conso réelle pour l'amortissement : la facture si dispo, sinon estimée.
-  let consoReelle = Number(state.chauffage.conso) || 0;
+  let consoReelle = consoNativeUnite();
   if (!(consoReelle > 0)) {
     const rendement = rendementChaudiere(state.chauffage.typeChaudiereKey, state.chauffage.energie);
     const finaleKwh = (dep.eChaufKwh + dep.eEcsKwh) / rendement;
@@ -243,20 +258,48 @@ function stepLogement() {
 
 const UNITE_CONSO = { gaz: "kWh", fioul: "litres", propane: "kg" };
 const PLACEHOLDER_CONSO = { gaz: "ex. 18000", fioul: "ex. 2000", propane: "ex. 1500" };
+const PLACEHOLDER_FACTURE_ANNUELLE = { gaz: "ex. 1600", fioul: "ex. 2200", propane: "ex. 2400" };
+const PLACEHOLDER_MENSUALITE = { gaz: "ex. 130", fioul: "ex. 185", propane: "ex. 200" };
 const LABEL_ENERGIE = { gaz: "Gaz de ville", fioul: "Fioul", propane: "Propane (citerne)" };
+const MODES_SAISIE_CONSO = [
+  ["quantite", "Quantité", null], // libellé précis calculé selon l'énergie
+  ["annuel", "Facture annuelle", "en €, abonnement inclus"],
+  ["mensuel", "Mensualité", "en €, ce que je paye chaque mois"],
+];
 
 function stepChauffage() {
   const e = state.chauffage.energie;
   const m = state.estimation.methode;
-  const consoLabel = `Consommation annuelle de ${LABEL_ENERGIE[e].toLowerCase()} (${UNITE_CONSO[e]})`;
+  const unite = state.chauffage.consoUnite || "quantite";
+
+  const modesOptions = MODES_SAISIE_CONSO.map(([v, titre, sous]) =>
+    v === "quantite" ? [v, `En ${UNITE_CONSO[e]}`, "si je connais ma consommation exacte"] : [v, titre, sous]
+  );
+
+  let champLabel, placeholder, champHint;
+  if (unite === "annuel") {
+    champLabel = `Montant de votre facture annuelle de ${LABEL_ENERGIE[e].toLowerCase()} (€)`;
+    placeholder = PLACEHOLDER_FACTURE_ANNUELLE[e];
+    champHint = "💡 Montant total payé sur les 12 derniers mois, abonnement compris.";
+  } else if (unite === "mensuel") {
+    champLabel = `Mensualité payée pour ${LABEL_ENERGIE[e].toLowerCase()} (€/mois)`;
+    placeholder = PLACEHOLDER_MENSUALITE[e];
+    champHint = "💡 Nous multiplions par 12 pour estimer votre consommation annuelle.";
+  } else {
+    champLabel = `Consommation annuelle de ${LABEL_ENERGIE[e].toLowerCase()} (${UNITE_CONSO[e]})`;
+    placeholder = PLACEHOLDER_CONSO[e];
+    champHint = "💡 Elle figure sur votre facture annuelle — c'est la méthode la plus fiable.";
+  }
 
   const blocConso = `
     <span class="field-label">Type / âge de la chaudière</span>
     ${optionCards("chaudiere", "chauffage.typeChaudiereKey", TYPES_CHAUDIERE, state.chauffage.typeChaudiereKey)}
+    <span class="field-label">Comment connaissez-vous votre consommation&nbsp;?</span>
+    ${optionCards("consoUnite", "chauffage.consoUnite", modesOptions, unite, { rerender: true })}
     <label class="field">
-      <span>${consoLabel}</span>
-      <input type="number" min="0" step="10" inputmode="numeric" data-bind="chauffage.conso" value="${state.chauffage.conso}" placeholder="${PLACEHOLDER_CONSO[e]}" />
-      <small class="hint">💡 Elle figure sur votre facture annuelle — c'est la méthode la plus fiable.</small>
+      <span>${champLabel}</span>
+      <input type="number" min="0" step="${unite === "quantite" ? "10" : "1"}" inputmode="numeric" data-bind="chauffage.conso" value="${state.chauffage.conso}" placeholder="${placeholder}" />
+      <small class="hint">${champHint}</small>
     </label>`;
 
   const blocLogement = `
@@ -411,6 +454,10 @@ function onFieldEvent(e) {
   const t = e.target;
   if (!t.dataset || !t.dataset.bind) return;
   setByPath(state, t.dataset.bind, coerce(t));
+
+  // Changer l'unité de saisie rend l'ancienne valeur ambiguë (ex. "18000" en
+  // kWh vs en €) : on vide le champ pour éviter une conversion erronée.
+  if (t.dataset.bind === "chauffage.consoUnite") state.chauffage.conso = "";
 
   if (t.dataset.live) {
     const target = root.querySelector(t.dataset.live);

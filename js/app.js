@@ -47,7 +47,9 @@ const state = {
   },
   chauffage: { energie: "gaz", typeChaudiereKey: "standard", conso: "", consoUnite: "quantite" },
   besoins: { avecEcs: true, emetteurKey: "radiateurs_BT", nbOccupants: 3 },
-  aides: { region: "hors_idf", nbPersonnes: 3, profil: null },
+  // nbPersonnes recopie nbOccupants tant que l'utilisateur ne l'a pas ajusté
+  // explicitement (foyerTouched) — évite de « repartir à 3 » à l'étape Aides.
+  aides: { region: "hors_idf", nbPersonnes: 3, profil: null, foyerTouched: false },
   lead: { prenom: "", nom: "", canal: "email", email: "", tel: "", codePostal: "", consent: false },
 };
 
@@ -328,14 +330,26 @@ function stepChauffage() {
 
 function stepBesoins() {
   const b = state.besoins;
+  const ecsSub = b.avecEcs
+    ? "La PAC assurera le chauffage <strong>et</strong> l'eau chaude ; votre consommation actuelle est donc répartie entre les deux usages."
+    : "Chauffage seul : votre eau chaude est produite par un autre équipement (ballon électrique, etc.), la consommation saisie ne sert qu'au chauffage.";
   return `
-    <p class="lead-in">La pompe à chaleur assurera votre <strong>chauffage et votre eau chaude sanitaire</strong>.</p>
     <span class="field-label">Type d'émetteurs</span>
     ${optionCards("emetteur", "besoins.emetteurKey", EMETTEURS, b.emetteurKey)}
+
+    <span class="field-label">Eau chaude sanitaire</span>
+    <label class="opt-card opt-card--check">
+      <input type="checkbox" data-bind="besoins.avecEcs" data-rerender ${b.avecEcs ? "checked" : ""} />
+      <span class="opt-card__body">
+        <span class="opt-card__title">🚿 Mon chauffage produit aussi l'eau chaude sanitaire</span>
+        <span class="opt-card__sub">${ecsSub}</span>
+      </span>
+    </label>
 
     <label class="field">
       <span>Nombre d'occupants : <strong id="occ-val">${b.nbOccupants}</strong></span>
       <input type="range" min="1" max="8" step="1" data-bind="besoins.nbOccupants" data-type="number" data-live="#occ-val" value="${b.nbOccupants}" />
+      <small class="hint">${b.avecEcs ? "Sert à estimer le volume d'eau chaude." : "Sert à adapter les seuils d'aides à votre foyer."}</small>
     </label>
   `;
 }
@@ -458,6 +472,14 @@ function onFieldEvent(e) {
   // Changer l'unité de saisie rend l'ancienne valeur ambiguë (ex. "18000" en
   // kWh vs en €) : on vide le champ pour éviter une conversion erronée.
   if (t.dataset.bind === "chauffage.consoUnite") state.chauffage.conso = "";
+
+  // Le foyer (étape Aides) suit le nombre d'occupants saisi à l'étape Besoins
+  // tant que l'utilisateur ne l'a pas ajusté séparément — sinon la valeur
+  // « repartait à 3 » et n'était pas conservée d'une étape à l'autre.
+  if (t.dataset.bind === "aides.nbPersonnes") state.aides.foyerTouched = true;
+  if (t.dataset.bind === "besoins.nbOccupants" && !state.aides.foyerTouched) {
+    state.aides.nbPersonnes = state.besoins.nbOccupants;
+  }
 
   if (t.dataset.live) {
     const target = root.querySelector(t.dataset.live);

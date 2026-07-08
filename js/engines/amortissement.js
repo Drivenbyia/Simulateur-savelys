@@ -54,6 +54,7 @@ export function calculerAmortissement({
   typeChaudiereKey = "standard",
   avecEcs = true,
   prixCentral,
+  prixFourchette, // [bas, haut] du prix → reste à charge & amortissement en fourchette
   aidesTotales,
 }) {
   const energie = ENERGIES[energieActuelle] || ENERGIES.gaz;
@@ -71,9 +72,18 @@ export function calculerAmortissement({
   // --- Économie annuelle "tout compris" (énergie + entretien des deux côtés).
   const economieAn = billEff + ENTRETIEN_CHAUDIERE - (pacAnnualCost + ENTRETIEN_PAC);
 
-  // --- Reste à charge et délai de retour.
-  const resteACharge = Math.max((Number(prixCentral) || 0) - (Number(aidesTotales) || 0), 0);
+  // --- Reste à charge et délai de retour (valeur centrale + fourchette).
+  const aides = Number(aidesTotales) || 0;
+  const resteACharge = Math.max((Number(prixCentral) || 0) - aides, 0);
   const amortissementAns = economieAn > 0 ? resteACharge / economieAn : null;
+
+  const resteAChargeFourchette = Array.isArray(prixFourchette)
+    ? prixFourchette.map((p) => Math.max((Number(p) || 0) - aides, 0))
+    : null;
+  const amortissementFourchette =
+    resteAChargeFourchette && economieAn > 0
+      ? resteAChargeFourchette.map((r) => r / economieAn)
+      : null;
 
   // --- Vieillissement de la chaudière actuelle (provision pannes + fin de vie).
   const age = AGE_CHAUDIERE[typeChaudiereKey] ?? AGE_CHAUDIERE.standard;
@@ -146,7 +156,9 @@ export function calculerAmortissement({
     coutFutur: pacAnnualCost,
     economieAn,
     resteACharge,
+    resteAChargeFourchette,
     amortissementAns,
+    amortissementFourchette,
     projection,
     crossover,
     diff10,

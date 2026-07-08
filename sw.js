@@ -1,8 +1,12 @@
 /**
- * Service worker — cache de l'app-shell pour l'installation PWA / usage hors-ligne.
- * Stratégie : cache-first sur les ressources statiques, avec mise à jour en tâche de fond.
+ * Service worker — installation PWA + usage hors-ligne.
+ *
+ * Stratégie NETWORK-FIRST sur le même domaine : on sert toujours la version
+ * fraîche quand le réseau est là (indispensable pour qu'un correctif de calcul
+ * atteigne immédiatement les utilisateurs), et on retombe sur le cache uniquement
+ * hors-ligne. Bumper CACHE à chaque changement de structure d'assets.
  */
-const CACHE = "simu-pac-savelys-v1";
+const CACHE = "simu-pac-savelys-v3";
 const ASSETS = [
   "./",
   "./index.html",
@@ -38,17 +42,16 @@ self.addEventListener("activate", (e) => {
 });
 
 self.addEventListener("fetch", (e) => {
-  if (e.request.method !== "GET") return;
+  const req = e.request;
+  if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
+  // Network-first : réseau prioritaire, cache en secours (hors-ligne).
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      const network = fetch(e.request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
-          return res;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+    fetch(req)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+        return res;
+      })
+      .catch(() => caches.match(req))
   );
 });

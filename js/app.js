@@ -145,6 +145,7 @@ function compute() {
     typeChaudiereKey: state.chauffage.typeChaudiereKey,
     avecEcs: state.besoins.avecEcs,
     prixCentral: prix.prixCentral,
+    prixFourchette: prix.fourchette,
     aidesTotales: aides.aidesTotales,
   });
 
@@ -276,14 +277,7 @@ function stepChauffage() {
 function stepBesoins() {
   const b = state.besoins;
   return `
-    <fieldset class="field">
-      <legend>Que doit couvrir la pompe à chaleur&nbsp;?</legend>
-      <div class="segmented">
-        <label><input type="radio" name="ecs" data-bind="besoins.avecEcs" data-type="bool" value="false" ${!b.avecEcs ? "checked" : ""}/> Chauffage seul</label>
-        <label><input type="radio" name="ecs" data-bind="besoins.avecEcs" data-type="bool" value="true" ${b.avecEcs ? "checked" : ""}/> Chauffage + eau chaude</label>
-      </div>
-    </fieldset>
-
+    <p class="lead-in">La pompe à chaleur assurera votre <strong>chauffage et votre eau chaude sanitaire</strong>.</p>
     <span class="field-label">Type d'émetteurs</span>
     ${optionCards("emetteur", "besoins.emetteurKey", EMETTEURS, b.emetteurKey)}
 

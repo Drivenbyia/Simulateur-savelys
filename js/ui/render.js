@@ -22,6 +22,15 @@ export const fmtKwh = (n) => `${nf0.format(Number(n) || 0)} kWh`;
 export const fmtAns = (n) =>
   n == null ? "—" : `${nf1.format(n)} an${n >= 2 ? "s" : ""}`;
 
+/** Amortissement en fourchette (« 3 – 4 ans ») si disponible, sinon valeur unique. */
+export function fmtAnsRange(m) {
+  const f = m.amortissementFourchette;
+  if (f && f[0] != null && f[1] != null) {
+    return `${nf1.format(f[0])} – ${nf1.format(f[1])} ans`;
+  }
+  return fmtAns(m.amortissementAns);
+}
+
 /** Petit helper de création d'élément depuis une chaîne HTML. */
 export function el(html) {
   const t = document.createElement("template");
@@ -91,19 +100,19 @@ export function renderResultatFinal(r) {
       ${ecrete}
 
       <div class="result-grid">
-        <div class="stat">
+        <div class="stat stat--accent">
           <span class="stat__label">Reste à charge estimé</span>
-          <span class="stat__value">${fmtEuro(m.resteACharge)}</span>
-          <span class="stat__hint">après aides</span>
+          <span class="stat__value">${m.resteAChargeFourchette ? fmtEuroRange(m.resteAChargeFourchette) : fmtEuro(m.resteACharge)}</span>
+          <span class="stat__hint">après aides · estimation non contractuelle</span>
         </div>
         <div class="stat stat--success">
           <span class="stat__label">Économies annuelles</span>
           <span class="stat__value">${fmtEuro(m.economieAn)}<span class="stat__unit">/an</span></span>
           <span class="stat__hint">énergie, abonnements et entretien inclus</span>
         </div>
-        <div class="stat stat--accent">
+        <div class="stat">
           <span class="stat__label">Amortissement</span>
-          <span class="stat__value">${fmtAns(m.amortissementAns)}</span>
+          <span class="stat__value">${fmtAnsRange(m)}</span>
           <span class="stat__hint">SCOP ${nf1.format(m.scop)} · ECS au COP ${nf1.format(m.copEcs)}</span>
         </div>
       </div>

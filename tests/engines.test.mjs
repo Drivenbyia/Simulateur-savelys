@@ -302,6 +302,20 @@ test("économies : cas réel 1600 L fioul (celui signalé comme trop optimiste)"
   assert.equal(r.anRemplacement, 5);
 });
 
+test("reste à charge et amortissement en fourchette (comme le prix)", () => {
+  const r = calculerAmortissement({
+    eChaufKwh: 16000, eEcsKwh: 3400, emetteurKey: "radiateurs_BT",
+    energieActuelle: "fioul", consoReelle: 2500, typeChaudiereKey: "standard",
+    avecEcs: true, prixCentral: 17000, prixFourchette: [15640, 18360], aidesTotales: 8000,
+  });
+  // reste = fourchette prix − aides
+  assert.deepEqual(r.resteAChargeFourchette.map(Math.round), [7640, 10360]);
+  assert.equal(r.resteAChargeFourchette[0] < r.resteACharge, true);
+  assert.equal(r.resteACharge < r.resteAChargeFourchette[1], true);
+  // amortissement : borne basse (prix bas) < borne haute (prix haut)
+  assert.ok(r.amortissementFourchette[0] < r.amortissementFourchette[1]);
+});
+
 test("projection 10 ans : deux scénarios cumulés + point de croisement", () => {
   const r = calculerAmortissement({
     eChaufKwh: 16000,

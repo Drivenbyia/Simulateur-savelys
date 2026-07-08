@@ -133,22 +133,30 @@ export const COEF_DIM = 0.9; // ∈ [0.80, 1.00] ; l'appoint élec couvre les po
 export const PUISSANCES_COMMERCIALES = [6, 8, 11, 14, 16]; // kW (puissances nominales à +7°C)
 
 /**
- * Déclassement de la PAC air/eau au froid : la puissance NOMINALE est mesurée à
- * +7°C (EN 14511). À la température de base, la PAC fournit moins (ex. terrain :
- * une 6 kW nominale ≈ 4 kW à −5°C → facteur ≈ 0,66). On modélise une perte
- * linéaire par °C sous +7°C, avec un plancher (au-delà, l'appoint électrique prend
- * le relais). Il faut donc surdimensionner la puissance nominale pour couvrir la
- * déperdition à la température de base — ce qui impacte aussi le prix.
+ * Déclassement de la PAC air/eau — calé sur données constructeurs (Atlantic Alféa,
+ * Daikin Altherma) : la puissance commerciale ≈ capacité au point de base −7°C pour
+ * les émetteurs basse/moyenne température. Le vrai déclassement vient surtout de la
+ * TEMPÉRATURE D'EAU demandée par l'émetteur :
+ *   - plancher chauffant (~35°C)      → facteur ≈ 1,00
+ *   - radiateurs basse température     → facteur ≈ 0,95
+ *   - radiateurs fonte haute temp (55-65°C) → facteur ≈ 0,78 (ex. Daikin HT « 14 » = 10,5 kW)
+ * Petit malus supplémentaire pour les zones plus froides que le point de base −7°C.
  */
-export const T_REF_PAC = 7; // °C — point de mesure de la puissance nominale
-export const PAC_DERATING_PAR_C = 0.028; // perte de capacité par °C sous +7°C (~2,8 %/°C)
-export const PAC_FACTOR_MIN = 0.5; // plancher de capacité au grand froid
+export const DERATING_EMETTEUR = {
+  plancher_BT: 1.0,
+  radiateurs_BT: 0.95,
+  radiateurs_fonte_HT: 0.78,
+};
+export const T_REF_PAC = -7; // °C — point de dimensionnement de référence
+export const PAC_DERATING_FROID_PAR_C = 0.012; // malus/°C sous −7°C uniquement
+export const PAC_FACTOR_MIN = 0.6; // plancher de capacité
 
-/** Facteur de capacité de la PAC (part de la puissance nominale) à la T° de base. */
-export function facteurCapacitePAC(tExtBase) {
+/** Facteur de capacité de la PAC selon l'émetteur (T° d'eau) et la T° de base. */
+export function facteurCapacitePAC(tExtBase, emetteurKey) {
+  const base = DERATING_EMETTEUR[emetteurKey] ?? 0.95;
   const t = Number.isFinite(tExtBase) ? tExtBase : T_REF_PAC;
-  const drop = T_REF_PAC - t;
-  return Math.min(1, Math.max(PAC_FACTOR_MIN, 1 - PAC_DERATING_PAR_C * drop));
+  const malusFroid = t < T_REF_PAC ? 1 - PAC_DERATING_FROID_PAR_C * (T_REF_PAC - t) : 1;
+  return Math.min(1, Math.max(PAC_FACTOR_MIN, base * malusFroid));
 }
 
 /**

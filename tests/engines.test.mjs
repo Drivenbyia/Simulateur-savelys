@@ -145,18 +145,21 @@ test("croisement A/B : on retient A et on lève l'avertissement si écart > 30 %
   assert.equal(res.coherence, "incoherent");
 });
 
-/* --- Moteur 2 : dimensionnement (déclassement au froid) --- */
-test("facteur de capacité PAC selon la T° de base", () => {
-  assert.equal(facteurCapacitePAC(7), 1); // au point de mesure
-  assert.ok(approx(facteurCapacitePAC(-5), 0.664, 0.001)); // 1 − 0.028×12
-  assert.equal(facteurCapacitePAC(-40), 0.5); // plancher
+/* --- Moteur 2 : dimensionnement (déclassement selon émetteur + froid) --- */
+test("facteur de capacité PAC selon l'émetteur et la T° de base", () => {
+  assert.equal(facteurCapacitePAC(-5, "plancher_BT"), 1); // plancher = pas de déclassement
+  assert.equal(facteurCapacitePAC(-5, "radiateurs_BT"), 0.95);
+  assert.equal(facteurCapacitePAC(-5, "radiateurs_fonte_HT"), 0.78); // haute température
+  // malus supplémentaire seulement plus froid que −7°C
+  assert.ok(approx(facteurCapacitePAC(-15, "radiateurs_BT"), 0.95 * (1 - 0.012 * 8), 0.001));
 });
 
-test("dimensionnement : ex. 6 kW déperdition à −5°C → PAC 8 kW (pas 6)", () => {
-  const d = dimensionnerPAC(6, { avecEcs: false, tExtBase: -5 });
-  // nominal requis = 6×0.9 / 0.664 ≈ 8.1 kW → commercial 8 kW
-  assert.equal(d.pCommercialeKW, 8);
-  assert.ok(d.pChauffageNominalKW > 6, `nominal ${d.pChauffageNominalKW}`);
+test("dimensionnement : ex. 6 kW déperdition radiateurs fonte HT à −5°C → PAC 8 kW", () => {
+  const ht = dimensionnerPAC(6, { avecEcs: false, tExtBase: -5, emetteurKey: "radiateurs_fonte_HT" });
+  assert.equal(ht.pCommercialeKW, 8); // 6×0.9/0.78 ≈ 6.9 → 8 kW (comme sur le terrain)
+  // Mais en basse température, une 6 kW suffit (pas de surdimensionnement inutile).
+  const bt = dimensionnerPAC(6, { avecEcs: false, tExtBase: -5, emetteurKey: "radiateurs_BT" });
+  assert.equal(bt.pCommercialeKW, 6);
 });
 
 test("dimensionnement : supplément ECS selon la taille du foyer (étude 2026)", () => {

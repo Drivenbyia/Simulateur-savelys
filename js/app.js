@@ -113,6 +113,7 @@ function compute() {
     avecEcs: state.besoins.avecEcs,
     nbPersonnes: state.besoins.nbOccupants,
     tExtBase, // déclassement de la PAC à la température de base
+    emetteurKey: state.besoins.emetteurKey, // + selon la T° d'eau de l'émetteur
   });
   const prix = estimerPrix({
     puissanceKW: dim.pCommercialeChauffageKW,

@@ -6,7 +6,7 @@
  * atteigne immédiatement les utilisateurs), et on retombe sur le cache uniquement
  * hors-ligne. Bumper CACHE à chaque changement de structure d'assets.
  */
-const CACHE = "simu-pac-savelys-v5";
+const CACHE = "simu-pac-savelys-v6";
 const ASSETS = [
   "./",
   "./index.html",

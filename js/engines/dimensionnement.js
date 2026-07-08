@@ -35,26 +35,27 @@ export function mapPuissanceCommerciale(pkW) {
 
 /**
  * @param {number} pDeperditionKW
- * @param {{ avecEcs?:boolean, nbPersonnes?:number, tExtBase?:number }} [options]
+ * @param {{ avecEcs?:boolean, nbPersonnes?:number, tExtBase?:number, emetteurKey?:string }} [options]
  * @returns {{
  *   factor:number, pChauffageNominalKW:number, pPacKW:number,
  *   pCommercialeChauffageKW:number, pCommercialeKW:number, suppEcsKW:number
  * }}
  */
-export function dimensionnerPAC(pDeperditionKW, { avecEcs = false, nbPersonnes = 0, tExtBase = -7 } = {}) {
-  const factor = facteurCapacitePAC(tExtBase);
+export function dimensionnerPAC(
+  pDeperditionKW,
+  { avecEcs = false, nbPersonnes = 0, tExtBase = -7, emetteurKey = "radiateurs_BT" } = {}
+) {
+  const factor = facteurCapacitePAC(tExtBase, emetteurKey);
   const pBesoinTbase = (Number(pDeperditionKW) || 0) * COEF_DIM; // kW à fournir à T_base
   const pChauffageNominalKW = factor > 0 ? pBesoinTbase / factor : pBesoinTbase; // nominal +7°C
   const suppEcsKW = avecEcs ? supplementEcsKw(nbPersonnes) : 0;
   const pPacKW = pChauffageNominalKW + suppEcsKW;
 
-  return {
-    factor,
-    pChauffageNominalKW,
-    pPacKW,
-    // Puissance commerciale pour le PRIX (chauffage seul) et pour l'affichage (avec ECS).
-    pCommercialeChauffageKW: nearestCommerciale(pChauffageNominalKW),
-    pCommercialeKW: nearestCommerciale(pPacKW),
-    suppEcsKW,
-  };
+  // Prix : plus petite puissance dont la capacité déclassée couvre le CHAUFFAGE.
+  const pCommercialeChauffageKW = mapPuissanceCommerciale(pChauffageNominalKW);
+  // Affichage : on tient compte de l'ECS mais sans faire sauter un palier entier
+  // pour un simple ballon (Duo à priorité ECS) → arrondi au plus proche, borné ≥ chauffage.
+  const pCommercialeKW = Math.max(pCommercialeChauffageKW, nearestCommerciale(pPacKW));
+
+  return { factor, pChauffageNominalKW, pPacKW, pCommercialeChauffageKW, pCommercialeKW, suppEcsKW };
 }

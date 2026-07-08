@@ -18,7 +18,7 @@ import {
 } from "../js/engines/deperditions.js";
 import { dimensionnerPAC, mapPuissanceCommerciale } from "../js/engines/dimensionnement.js";
 import { estimerPrix } from "../js/engines/prix.js";
-import { facteurCapacitePAC } from "../js/constants.js";
+import { facteurCapacitePAC, factureAnnuelleToConso } from "../js/constants.js";
 import { determinerProfil, calculerAides, seuilsPourFoyer, ceeSavelys } from "../js/engines/aides.js";
 import { calculerAmortissement, coutEnergieActuelle } from "../js/engines/amortissement.js";
 
@@ -268,6 +268,27 @@ test("coût énergie actuelle : tables PacCloser (prix + abonnement)", () => {
   assert.ok(approx(coutEnergieActuelle("gaz", 20000), 2912.83, 0.01));
   // Propane : 1500 kg × 12,87 kWh × 0,1865 + abonnement 120.
   assert.ok(approx(coutEnergieActuelle("propane", 1500), 3720.53, 0.5), coutEnergieActuelle("propane", 1500));
+});
+
+test("facture annuelle (€) → conso native : round-trip avec coutEnergieActuelle", () => {
+  // Fioul (pas d'abonnement) : facture / prixKwh / pci → litres, puis on revérifie
+  // que coutEnergieActuelle(litres) retombe bien sur la facture de départ.
+  const litresFioul = factureAnnuelleToConso("fioul", 2820);
+  assert.ok(approx(litresFioul, 2000, 0.5));
+  assert.ok(approx(coutEnergieActuelle("fioul", litresFioul), 2820, 0.5));
+
+  // Gaz : l'abonnement (359,63 €) est déduit avant de convertir en kWh.
+  const kwhGaz = factureAnnuelleToConso("gaz", 2912.83);
+  assert.ok(approx(kwhGaz, 20000, 1));
+  assert.ok(approx(coutEnergieActuelle("gaz", kwhGaz), 2912.83, 1));
+
+  // Propane : abonnement 120 €/an déduit, puis conversion via le PCI (12,87 kWh/kg).
+  const kgPropane = factureAnnuelleToConso("propane", 3720.53);
+  assert.ok(approx(kgPropane, 1500, 1));
+
+  // Facture nulle ou négative → conso nulle (pas de saisie).
+  assert.equal(factureAnnuelleToConso("gaz", 0), 0);
+  assert.equal(factureAnnuelleToConso("gaz", -100), 0);
 });
 
 test("propane : conversion kg → kWh (PCI 12,87)", () => {

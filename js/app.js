@@ -6,7 +6,8 @@
 
 import {
   rendementChaudiere,
-  PCI_FIOUL,
+  pciEnergie,
+  ENERGIES,
   T_INT,
   E_ECS_UTILE,
   HAUTEUR_SOUS_PLAFOND_DEFAUT,
@@ -114,7 +115,7 @@ function compute() {
   });
   const prix = estimerPrix({
     pDeperditionKW: dep.pDeperditionKW,
-    avecEcs: state.besoins.avecEcs,
+    emetteurKey: state.besoins.emetteurKey,
     idf,
   });
 
@@ -133,7 +134,7 @@ function compute() {
   if (!(consoReelle > 0)) {
     const rendement = rendementChaudiere(state.chauffage.typeChaudiereKey, state.chauffage.energie);
     const finaleKwh = (dep.eChaufKwh + dep.eEcsKwh) / rendement;
-    consoReelle = state.chauffage.energie === "fioul" ? finaleKwh / PCI_FIOUL : finaleKwh;
+    consoReelle = finaleKwh / pciEnergie(state.chauffage.energie); // → unité de l'énergie
   }
 
   const amort = calculerAmortissement({
@@ -144,6 +145,7 @@ function compute() {
     consoReelle,
     typeChaudiereKey: state.chauffage.typeChaudiereKey,
     avecEcs: state.besoins.avecEcs,
+    zone: zoneCoarse(zoneCode) || "H2",
     prixCentral: prix.prixCentral,
     prixFourchette: prix.fourchette,
     aidesTotales: aides.aidesTotales,
@@ -237,17 +239,21 @@ function stepLogement() {
   `;
 }
 
+const UNITE_CONSO = { gaz: "kWh", fioul: "litres", propane: "kg" };
+const PLACEHOLDER_CONSO = { gaz: "ex. 18000", fioul: "ex. 2000", propane: "ex. 1500" };
+const LABEL_ENERGIE = { gaz: "Gaz de ville", fioul: "Fioul", propane: "Propane (citerne)" };
+
 function stepChauffage() {
   const e = state.chauffage.energie;
   const m = state.estimation.methode;
-  const consoLabel = e === "fioul" ? "Consommation annuelle de fioul (litres)" : "Consommation annuelle de gaz (kWh)";
+  const consoLabel = `Consommation annuelle de ${LABEL_ENERGIE[e].toLowerCase()} (${UNITE_CONSO[e]})`;
 
   const blocConso = `
     <span class="field-label">Type / âge de la chaudière</span>
     ${optionCards("chaudiere", "chauffage.typeChaudiereKey", TYPES_CHAUDIERE, state.chauffage.typeChaudiereKey)}
     <label class="field">
       <span>${consoLabel}</span>
-      <input type="number" min="0" step="100" inputmode="numeric" data-bind="chauffage.conso" value="${state.chauffage.conso}" placeholder="ex. 18000" />
+      <input type="number" min="0" step="10" inputmode="numeric" data-bind="chauffage.conso" value="${state.chauffage.conso}" placeholder="${PLACEHOLDER_CONSO[e]}" />
       <small class="hint">💡 Elle figure sur votre facture annuelle — c'est la méthode la plus fiable.</small>
     </label>`;
 
@@ -262,8 +268,9 @@ function stepChauffage() {
     <fieldset class="field">
       <legend>Énergie actuelle</legend>
       <div class="segmented">
-        <label><input type="radio" name="energie" data-bind="chauffage.energie" data-rerender value="gaz" ${e === "gaz" ? "checked" : ""}/> Gaz</label>
+        <label><input type="radio" name="energie" data-bind="chauffage.energie" data-rerender value="gaz" ${e === "gaz" ? "checked" : ""}/> Gaz de ville</label>
         <label><input type="radio" name="energie" data-bind="chauffage.energie" data-rerender value="fioul" ${e === "fioul" ? "checked" : ""}/> Fioul</label>
+        <label><input type="radio" name="energie" data-bind="chauffage.energie" data-rerender value="propane" ${e === "propane" ? "checked" : ""}/> Propane</label>
       </div>
     </fieldset>
 

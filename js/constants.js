@@ -21,6 +21,8 @@ export const ENERGIES = {
     inflation: 0.05,
     rendementNeuf: 0.92,
     prixChaudiereNeuve: 4500,
+    unite: "kWh", // saisie directe en kWh
+    pci: 1,
   },
   fioul: {
     prixKwh: 0.141, // = 1,41 €/L à 10 kWh/L
@@ -28,11 +30,26 @@ export const ENERGIES = {
     inflation: 0.04,
     rendementNeuf: 0.9,
     prixChaudiereNeuve: 8500,
+    unite: "L", // litres
+    pci: 10, // kWh/L
+  },
+  propane: {
+    prixKwh: 0.1865,
+    abonnement: 120,
+    inflation: 0.05,
+    rendementNeuf: 0.92,
+    prixChaudiereNeuve: 5000,
+    unite: "kg", // kilos (citerne)
+    pci: 12.87, // kWh/kg
   },
 };
 
-export const PCI_FIOUL = 10; // kWh/L (1 L de fioul ≈ 10 kWh PCI)
+export const PCI_FIOUL = ENERGIES.fioul.pci; // 10 kWh/L
 export const PRIX_FIOUL_LITRE = ENERGIES.fioul.prixKwh * PCI_FIOUL; // 1,41 €/L
+/** PCI (kWh par unité physique saisie) selon l'énergie. */
+export function pciEnergie(energie) {
+  return ENERGIES[energie]?.pci ?? 1;
+}
 
 /* --- Électricité (PAC) --- */
 export const PRIX_ELEC = 0.194; // €/kWh TTC (TRV)
@@ -69,9 +86,9 @@ export function E_ECS_UTILE(nbPersonnes) {
 
 /* --- Rendements chaudière ACTUELLE (méthode PacCloser : type × combustible) --- */
 export const RENDEMENTS_CHAUDIERE = {
-  condensation: { gaz: 0.92, fioul: 0.9 }, // < 10 ans
-  standard: { gaz: 0.85, fioul: 0.83 }, // 10–20 ans
-  ancienne: { gaz: 0.78, fioul: 0.78 }, // > 20 ans / pré-2000
+  condensation: { gaz: 0.92, fioul: 0.9, propane: 0.92 }, // < 10 ans
+  standard: { gaz: 0.85, fioul: 0.83, propane: 0.85 }, // 10–20 ans
+  ancienne: { gaz: 0.78, fioul: 0.78, propane: 0.78 }, // > 20 ans / pré-2000
 };
 
 /** Rendement chaudière selon type + combustible. */
@@ -128,32 +145,44 @@ export function supplementEcsKw(nbPersonnes) {
 }
 
 /**
- * Prix — Moteur 3 (€ TTC, pose comprise) : grille réelle Savelys.
- * Fonction de la puissance de DÉPERDITION (kW) ; interpolation linéaire par
- * morceaux, clampée en dehors de [4,15] kW. Le type d'émetteur n'influence pas
- * le prix (décision utilisateur) ; il reste utilisé pour le SCOP (Moteur 4).
+ * Prix — Moteur 3 : modèle issu de l'étude de prix 2026 (plus fiable qu'un forfait).
+ * On additionne : matériel PAC air/eau Duo (chauffage + ECS, € HT) + accessoires
+ * (pot à boue + ballon tampon) + main-d'œuvre de pose (régionalisée), puis TVA 5,5 %.
+ * Chaque poste est une FOURCHETTE [bas, haut] → la fourchette de prix client en découle.
+ *
+ * Matériel par puissance PAC (chauffage) et par classe d'émetteur :
+ *   - "bt" = basse/moyenne température (plancher, radiateurs BT)
+ *   - "ht" = haute température (radiateurs fonte) → PAC HT plus chère
  */
-export const PRIX_PAR_DEPERDITION = [
-  { depKw: 4, prix: 11000 },
-  { depKw: 8, prix: 15000 },
-  { depKw: 15, prix: 17000 },
-];
-export const SUPPLEMENT_ECS = 2000; // € ajoutés si chauffage + eau chaude sanitaire
-/**
- * Majoration de pose en Île-de-France (étude 2026 : taux horaire 70–140 € HT vs
- * 40–80 € en province, facteur ≥ 1,35 sur la main-d'œuvre → forfait +≈1 200 €).
- */
-export const MAJORATION_POSE_IDF = 1200; // €
+export const PRIX_ETUDE = {
+  materiel: {
+    // puissance commerciale (kW) : { bt:[bas,haut], ht:[bas,haut] } — € HT, Duo (+ECS)
+    6: { bt: [6000, 7500], ht: [7500, 9000] },
+    8: { bt: [7500, 9500], ht: [9000, 11000] },
+    11: { bt: [9000, 11000], ht: [11000, 13500] },
+    14: { bt: [11000, 13500], ht: [13500, 16000] },
+    16: { bt: [11000, 13500], ht: [13500, 16000] },
+  },
+  accessoires: [650, 1200], // pot à boue magnétique + ballon tampon, € HT
+  poseProvince: [1500, 2500], // main-d'œuvre, € HT
+  poseIdf: [3000, 5000], // Île-de-France (taux horaire ~×1,35), € HT
+  tva: 1.055, // TVA 5,5 % (logement > 2 ans, artisan RGE)
+};
 export const DEPTS_IDF = new Set(["75", "77", "78", "91", "92", "93", "94", "95"]);
-export const PRIX_FOURCHETTE = 0.08; // ±8 % autour du prix central
 
 /* --- Amortissement — Moteur 4 --- */
-/** SCOP saisonnier selon le type d'émetteur (les radiateurs fonte HT le dégradent). */
+/** SCOP nominal (constructeur) selon le type d'émetteur. */
 export const SCOP = {
   plancher_BT: 4.0,
   radiateurs_BT: 3.5,
   radiateurs_fonte_HT: 2.9,
 };
+/**
+ * Dégradation du SCOP en "SCOP saisonnier RÉEL" selon la zone climatique :
+ * en zone froide la PAC passe plus de temps à basse T°/dégivrage → SCOP réel < nominal.
+ * Calé sur l'outil terrain PacCloser (ex. fonte HT en H2 → ≈ 2,5). Prudent.
+ */
+export const SCOP_DERATING_ZONE = { H1: 0.82, H2: 0.86, H3: 0.94 };
 export const PROJECTION_ANNEES = 10;
 
 /* --- Divers --- */

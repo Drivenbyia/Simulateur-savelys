@@ -11,6 +11,7 @@
 
 import {
   ENERGIES,
+  pciEnergie,
   PCI_FIOUL,
   PRIX_ELEC,
   ELEC_INFLATION,
@@ -23,6 +24,7 @@ import {
   AGE_CHAUDIERE,
   provisionPannes,
   SCOP,
+  SCOP_DERATING_ZONE,
   PCS_PCI_RATIO,
   CORRECTION_PCI_GAZ_DEFAUT,
   PROJECTION_ANNEES,
@@ -31,7 +33,7 @@ import {
 /** Coût annuel de l'énergie actuelle (énergie seule + abonnement). */
 export function coutEnergieActuelle(energie, conso) {
   const e = ENERGIES[energie] || ENERGIES.gaz;
-  const kwh = energie === "fioul" ? (Number(conso) || 0) * PCI_FIOUL : Number(conso) || 0;
+  const kwh = (Number(conso) || 0) * pciEnergie(energie); // gaz kWh / fioul L / propane kg
   return kwh * e.prixKwh + e.abonnement;
 }
 
@@ -53,12 +55,15 @@ export function calculerAmortissement({
   consoReelle,
   typeChaudiereKey = "standard",
   avecEcs = true,
+  zone = "H2", // zone grossière H1/H2/H3 → SCOP saisonnier réel
   prixCentral,
   prixFourchette, // [bas, haut] du prix → reste à charge & amortissement en fourchette
   aidesTotales,
 }) {
   const energie = ENERGIES[energieActuelle] || ENERGIES.gaz;
-  const scop = SCOP[emetteurKey] ?? SCOP.radiateurs_BT;
+  // SCOP saisonnier RÉEL = SCOP nominal × facteur de dégradation climatique (prudent).
+  const scopNominal = SCOP[emetteurKey] ?? SCOP.radiateurs_BT;
+  const scop = scopNominal * (SCOP_DERATING_ZONE[zone] ?? SCOP_DERATING_ZONE.H2);
   const heatDemand = Number(eChaufKwh) || 0; // kWh utiles chauffage
   const ecsUseful = avecEcs ? Number(eEcsKwh) || 0 : 0;
 

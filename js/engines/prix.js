@@ -1,57 +1,37 @@
 /**
  * Moteur 3 — Estimation prix (fourchette indicative, non contractuelle).
  *
- * Grille réelle Savelys : prix fonction de la puissance de déperdition (kW),
- * interpolée linéairement par morceaux entre les points connus, + supplément
- * fixe si chauffage + eau chaude sanitaire (ECS).
- * Fourchette affichée = prix central ± 8 %.
+ * Modèle de l'étude de prix 2026 (plus fiable qu'un forfait) : prix moyen national
+ * du matériel PAC air/eau Duo + accessoires + main-d'œuvre de pose régionalisée,
+ * additionnés en HT puis TVA 5,5 %. La fourchette client = somme des bornes
+ * basses → somme des bornes hautes de chaque poste.
  */
 
-import {
-  PRIX_PAR_DEPERDITION,
-  SUPPLEMENT_ECS,
-  MAJORATION_POSE_IDF,
-  PRIX_FOURCHETTE,
-} from "../constants.js";
+import { PRIX_ETUDE, COEF_DIM, PUISSANCES_COMMERCIALES } from "../constants.js";
 
-/**
- * Interpolation linéaire par morceaux sur une table de points {depKw, prix}
- * triée par depKw croissant. Clampe en dehors des bornes (retient la valeur
- * du point extrême le plus proche).
- */
-export function interpolerPrix(depKw, points = PRIX_PAR_DEPERDITION) {
-  const x = Number(depKw) || 0;
-  if (x <= points[0].depKw) return points[0].prix;
-  const last = points[points.length - 1];
-  if (x >= last.depKw) return last.prix;
-
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
-    if (x >= a.depKw && x <= b.depKw) {
-      const t = (x - a.depKw) / (b.depKw - a.depKw);
-      return a.prix + t * (b.prix - a.prix);
-    }
-  }
-  return last.prix;
+/** Puissance commerciale (kW) retenue pour le CHAUFFAGE à partir de la déperdition. */
+export function puissanceCommercialeChauffage(pDeperditionKW) {
+  const p = (Number(pDeperditionKW) || 0) * COEF_DIM;
+  return PUISSANCES_COMMERCIALES.find((x) => x >= p) ?? PUISSANCES_COMMERCIALES.at(-1);
 }
 
 /**
- * @param {{ pDeperditionKW:number, avecEcs:boolean, idf?:boolean }} input
- *   idf : logement en Île-de-France → majoration de pose (main-d'œuvre plus chère,
- *   étude 2026 : facteur ≥ 1,35 sur la main-d'œuvre francilienne).
- * @returns {{ prixCentral:number, fourchette:[number,number] }}
+ * @param {{ pDeperditionKW:number, emetteurKey:string, idf?:boolean }} input
+ * @returns {{ prixCentral:number, fourchette:[number,number], puissanceKW:number }}
  */
-export function estimerPrix({ pDeperditionKW, avecEcs, idf = false }) {
-  const base = interpolerPrix(pDeperditionKW, PRIX_PAR_DEPERDITION);
-  const prixCentral =
-    base + (avecEcs ? SUPPLEMENT_ECS : 0) + (idf ? MAJORATION_POSE_IDF : 0);
+export function estimerPrix({ pDeperditionKW, emetteurKey, idf = false }) {
+  const puissanceKW = puissanceCommercialeChauffage(pDeperditionKW);
+  const mat = PRIX_ETUDE.materiel[puissanceKW] || PRIX_ETUDE.materiel[11];
+  const classe = emetteurKey === "radiateurs_fonte_HT" ? "ht" : "bt";
+  const materiel = mat[classe];
+  const pose = idf ? PRIX_ETUDE.poseIdf : PRIX_ETUDE.poseProvince;
+  const acc = PRIX_ETUDE.accessoires;
 
-  return {
-    prixCentral,
-    fourchette: [
-      prixCentral * (1 - PRIX_FOURCHETTE),
-      prixCentral * (1 + PRIX_FOURCHETTE),
-    ],
-  };
+  // Somme HT bornes basses / hautes, puis TVA 5,5 %.
+  const htBas = materiel[0] + acc[0] + pose[0];
+  const htHaut = materiel[1] + acc[1] + pose[1];
+  const fourchette = [htBas * PRIX_ETUDE.tva, htHaut * PRIX_ETUDE.tva];
+  const prixCentral = (fourchette[0] + fourchette[1]) / 2;
+
+  return { prixCentral, fourchette, puissanceKW };
 }

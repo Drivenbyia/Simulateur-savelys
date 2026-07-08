@@ -13,7 +13,7 @@
  */
 
 import {
-  PCI_FIOUL,
+  pciEnergie,
   G_RANGE,
   POIDS_ISOLATION,
   T_INT,
@@ -44,8 +44,8 @@ export function coefG(epoqueKey, travaux = {}) {
 
 /** Consommation saisie convertie en kWh d'énergie achetée (kwhBase). */
 export function consoEnKwh(energie, conso) {
-  const v = Number(conso) || 0;
-  return energie === "fioul" ? v * PCI_FIOUL : v; // fioul en litres, gaz déjà en kWh
+  // gaz : kWh direct ; fioul : litres ×10 ; propane : kg ×12,87.
+  return (Number(conso) || 0) * pciEnergie(energie);
 }
 
 /** Ratio de correction régime nocturne (setback). ≤ 1 → gonfle la déperdition. */

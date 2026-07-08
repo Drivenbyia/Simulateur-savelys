@@ -42,12 +42,21 @@ export function determinerProfil(rfr, nbPersonnes, region = "hors_idf") {
   return "rose";
 }
 
-/** Montant CEE Savelys selon zone climatique, surface et profil. */
-export function ceeSavelys(zone, surface, profil) {
+/**
+ * Montant CEE Savelys selon zone climatique, surface et profil.
+ *
+ * PRUDENCE (consigne terrain) : on annonce toujours le CEE le plus BAS, pour que
+ * ce soit une bonne surprise en rendez-vous. La surface détermine si le client
+ * PEUT prétendre à la tranche haute (> 90 m²), mais le montant annoncé retient
+ * la plus petite valeur possible (tranche « petite »). Passer `prudent = false`
+ * pour obtenir le montant réel selon la surface.
+ */
+export function ceeSavelys(zone, surface, profil, prudent = true) {
   const grille = CEE_SAVELYS[zone];
   if (!grille) return 0;
-  const tranche = (Number(surface) || 0) > CEE_SURFACE_SEUIL ? "grande" : "petite";
   const classe = profil === "bleu" ? "tres_modeste" : "autres";
+  if (prudent) return Math.min(grille.grande[classe], grille.petite[classe]);
+  const tranche = (Number(surface) || 0) > CEE_SURFACE_SEUIL ? "grande" : "petite";
   return grille[tranche][classe];
 }
 

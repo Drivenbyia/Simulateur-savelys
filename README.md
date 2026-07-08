@@ -46,16 +46,25 @@ js/ui/                   tunnel (navigation) · render (résultats) · lead (gat
 js/app.js                Orchestration
 ```
 
-Le **Moteur 1** reprend fidèlement la méthode « garde-fou » de PacCloser (pipeline DJU :
-conso → ECS → correction PCS/PCI gaz → rendement chaudière → puissance à la température
-de base) ; sa voie « logement » utilise la méthode volumique de l'étude 2026
-(P = G × V × ΔT, coefficient G par période RT 1974 → RE 2020, glissé selon les travaux
-d'isolation pondérés ADEME). Le **Moteur 4** reprend la méthode « économies » de
-PacCloser : comparaison **tout compris** (énergie + abonnements + entretien 150/180 €/an),
-ECS au COP 2,5, surcoût d'abonnement élec (+80 €/an), projection 10 ans à deux scénarios
-avec inflation par énergie, provision de pannes selon l'âge et remplacement forcé de la
-chaudière à 20 ans, point de croisement, et scénario prudent fioul à 1,15 €/L.
-La **grille CEE** est la grille réelle Savelys (par zone × surface × profil).
+Le **Moteur 1** reprend fidèlement la méthode « garde-fou » de PacCloser (pipeline DJU) ;
+sa voie « logement » utilise la méthode volumique de l'étude 2026 (P = G × V × ΔT,
+coefficient G par période RT 1974 → RE 2020, glissé selon les travaux d'isolation ADEME).
+Énergies gérées : **gaz de ville, fioul, propane** (tables PacCloser §0).
+
+Le **Moteur 3 (prix)** applique le modèle de l'étude 2026 : matériel PAC air/eau Duo +
+accessoires (pot à boue, ballon tampon) + main-d'œuvre régionalisée (majoration IDF),
+en HT puis TVA 5,5 % → **fourchette** bas/haut. L'émetteur (BT vs fonte HT) et la puissance
+influent sur le matériel.
+
+Le **Moteur 4 (économies)** reprend PacCloser : comparaison **tout compris** (énergie +
+abonnements + entretien 150/180 €/an), **SCOP saisonnier réel** (SCOP nominal dégradé par
+zone climatique, ex. fonte HT en H2 ≈ 2,5), ECS au COP 2,5, surcoût abonnement élec +80 €/an,
+projection 10 ans à deux scénarios (inflation, provision de pannes, remplacement chaudière à
+20 ans), point de croisement, scénario prudent fioul à 1,15 €/L.
+
+**Prudence commerciale** : le **CEE annoncé est toujours le plus bas** (tranche basse), et le
+reste à charge / amortissement sont présentés en **fourchette** — pour ne jamais sur-promettre
+et garder du positif en rendez-vous. La grille CEE reste la grille réelle Savelys.
 
 ## Captation du lead (RGPD)
 

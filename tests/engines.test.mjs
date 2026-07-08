@@ -17,8 +17,8 @@ import {
   coefG,
 } from "../js/engines/deperditions.js";
 import { dimensionnerPAC, mapPuissanceCommerciale } from "../js/engines/dimensionnement.js";
-import { estimerPrix, interpolerPrix } from "../js/engines/prix.js";
-import { determinerProfil, calculerAides, seuilsPourFoyer } from "../js/engines/aides.js";
+import { estimerPrix, puissanceCommercialeChauffage } from "../js/engines/prix.js";
+import { determinerProfil, calculerAides, seuilsPourFoyer, ceeSavelys } from "../js/engines/aides.js";
 import { calculerAmortissement, coutEnergieActuelle } from "../js/engines/amortissement.js";
 
 const approx = (a, b, tol = 0.5) => Math.abs(a - b) <= tol;
@@ -162,38 +162,31 @@ test("dimensionnement : supplément ECS selon la taille du foyer (étude 2026)",
   assert.equal(dimensionnerPAC(10, { avecEcs: true, nbPersonnes: 2 }).suppEcsKW, 1);
 });
 
-/* --- Moteur 3 : prix (grille réelle Savelys, interpolation par morceaux) --- */
-test("prix : points connus 4/8/15 kW, chauffage seul", () => {
-  assert.equal(interpolerPrix(4), 11000);
-  assert.equal(interpolerPrix(8), 15000);
-  assert.equal(interpolerPrix(15), 17000);
+/* --- Moteur 3 : prix (modèle étude 2026 : matériel + accessoires + pose, TVA 5,5 %) --- */
+test("prix : puissance de chauffage retenue depuis la déperdition", () => {
+  assert.equal(puissanceCommercialeChauffage(11.5), 11); // 11.5×0.9=10.35 → 11 kW
+  assert.equal(puissanceCommercialeChauffage(5), 6);
+  assert.equal(puissanceCommercialeChauffage(20), 16);
 });
 
-test("prix : interpolation par morceaux entre les points", () => {
-  // Segment [4,8] : pente 1000 €/kW → 6 kW = 11000 + 2*1000 = 13000
-  assert.ok(approx(interpolerPrix(6), 13000, 0.01), `6kW: ${interpolerPrix(6)}`);
-  // Segment [8,15] : pente (17000-15000)/7 ≈ 285.71 €/kW → 11 kW = 15000 + 3*285.71
-  assert.ok(approx(interpolerPrix(11), 15857.14, 0.1), `11kW: ${interpolerPrix(11)}`);
+test("prix : cas de référence (11,5 kW, fonte HT, province) ≈ 16 000 € TTC central", () => {
+  const p = estimerPrix({ pDeperditionKW: 11.5, emetteurKey: "radiateurs_fonte_HT" });
+  assert.equal(p.puissanceKW, 11);
+  // HT 11 kW : matériel 11000-13500 + acc 650-1200 + pose 1500-2500, ×1,055
+  assert.ok(approx(p.fourchette[0], 13873, 1), `bas ${p.fourchette[0]}`);
+  assert.ok(approx(p.fourchette[1], 18147, 1), `haut ${p.fourchette[1]}`);
+  assert.ok(approx(p.prixCentral, 16010, 1), `central ${p.prixCentral}`);
 });
 
-test("prix : clamp en dehors de [4,15] kW", () => {
-  assert.equal(interpolerPrix(2), 11000);
-  assert.equal(interpolerPrix(20), 17000);
-});
+test("prix : émetteur BT moins cher que fonte HT ; IDF plus cher que province", () => {
+  const bt = estimerPrix({ pDeperditionKW: 11.5, emetteurKey: "radiateurs_BT" });
+  const ht = estimerPrix({ pDeperditionKW: 11.5, emetteurKey: "radiateurs_fonte_HT" });
+  assert.ok(bt.prixCentral < ht.prixCentral);
 
-test("estimerPrix : ECS ajoute le supplément fixe, fourchette encadre le central", () => {
-  const seul = estimerPrix({ pDeperditionKW: 8, avecEcs: false });
-  assert.equal(seul.prixCentral, 15000);
-  assert.ok(approx(seul.fourchette[0], 13800, 0.01));
-  assert.ok(approx(seul.fourchette[1], 16200, 0.01));
-
-  const avecEcs = estimerPrix({ pDeperditionKW: 8, avecEcs: true });
-  assert.equal(avecEcs.prixCentral, 17000); // +2000€ ECS
-});
-
-test("estimerPrix : majoration de pose Île-de-France", () => {
-  const idf = estimerPrix({ pDeperditionKW: 8, avecEcs: false, idf: true });
-  assert.equal(idf.prixCentral, 16200); // 15000 + 1200 de main-d'œuvre francilienne
+  const prov = estimerPrix({ pDeperditionKW: 8, emetteurKey: "radiateurs_BT" });
+  const idf = estimerPrix({ pDeperditionKW: 8, emetteurKey: "radiateurs_BT", idf: true });
+  assert.ok(idf.prixCentral > prov.prixCentral);
+  assert.ok(idf.fourchette[0] < idf.fourchette[1]);
 });
 
 /* --- Moteur 5 : aides --- */
@@ -206,39 +199,35 @@ test("profil ANAH selon RFR (2 pers, hors IDF)", () => {
   assert.equal(determinerProfil(60000, 2), "rose");
 });
 
-test("aides + écrêtement (profil bleu, fioul, H1, >90 m²)", () => {
+test("CEE prudent : on annonce toujours la valeur la plus basse (tranche petite)", () => {
+  // Même à grande surface (> 90 m²), le CEE annoncé retient la tranche basse.
+  const bleuH1 = ceeSavelys("H1", 150, "bleu"); // prudent par défaut
+  assert.equal(bleuH1, 4237); // H1 "petite" très modeste (et non 7272)
+  // Le montant réel selon surface reste accessible via prudent=false.
+  assert.equal(ceeSavelys("H1", 150, "bleu", false), 7272); // H1 "grande" très modeste
+  // Distinction très modeste ≠ autres conservée.
+  assert.equal(ceeSavelys("H2", 80, "violet"), 2386); // H2 petite autres
+  assert.equal(ceeSavelys("H2", 120, "violet"), 2386); // prudent : reste petite
+});
+
+test("aides + écrêtement (profil bleu, fioul, CEE prudent)", () => {
   const a = calculerAides({
     rfr: 20000,
     nbPersonnes: 2,
     energieActuelle: "fioul",
-    prixCentral: 18221.25,
+    prixCentral: 10000, // dépense éligible 10 000 → plafond bleu 9 000
     zone: "H1",
-    surface: 100, // > 90 → tranche "grande"
+    surface: 150,
   });
   assert.equal(a.profil, "bleu");
   assert.equal(a.mpr, 5000);
-  assert.equal(a.cee, 7272); // H1 grande très modeste
+  assert.equal(a.cee, 4237); // CEE prudent (petite), pas 7272
   assert.equal(a.bonusFioul, 1200);
-  assert.equal(a.aidesBrutes, 13472);
-  assert.equal(a.depenseEligible, 12000); // plafonné
-  assert.ok(approx(a.plafondEcretement, 10800, 1));
-  assert.equal(a.aidesTotales, 10800); // écrêté
+  assert.equal(a.aidesBrutes, 10437);
+  assert.equal(a.depenseEligible, 10000);
+  assert.ok(approx(a.plafondEcretement, 9000, 1));
+  assert.equal(a.aidesTotales, 9000); // écrêté à 90 % de la dépense éligible
   assert.equal(a.ecrete, true);
-});
-
-test("CEE Savelys : très modeste ≠ autres, et tranche de surface", () => {
-  const petiteAutres = calculerAides({
-    rfr: 40000, nbPersonnes: 2, energieActuelle: "gaz", prixCentral: 12000,
-    zone: "H2", surface: 80, // ≤ 90 → "petite", profil violet → "autres"
-  });
-  assert.equal(petiteAutres.profil, "violet");
-  assert.equal(petiteAutres.cee, 2386); // H2 petite autres
-
-  const grandeModeste = calculerAides({
-    rfr: 20000, nbPersonnes: 2, energieActuelle: "gaz", prixCentral: 12000,
-    zone: "H2", surface: 120, // > 90 → "grande", profil bleu → tres_modeste
-  });
-  assert.equal(grandeModeste.cee, 6060); // H2 grande très modeste
 });
 
 test("aides : profil explicite prioritaire sur le RFR", () => {
@@ -264,7 +253,7 @@ test("profil rose : MPR nul et pas de bonus fioul", () => {
   assert.equal(a.profil, "rose");
   assert.equal(a.mpr, 0);
   assert.equal(a.bonusFioul, 0);
-  assert.equal(a.cee, 4915); // H1 grande autres
+  assert.equal(a.cee, 2864); // H1 "petite" autres (CEE prudent)
 });
 
 /* --- Moteur 4 : économies & amortissement (méthode PacCloser) --- */
@@ -273,33 +262,41 @@ test("coût énergie actuelle : tables PacCloser (prix + abonnement)", () => {
   assert.ok(approx(coutEnergieActuelle("fioul", 2000), 2820, 0.01));
   // Gaz : 20 000 kWh × 0,12766 + abonnement 359,63.
   assert.ok(approx(coutEnergieActuelle("gaz", 20000), 2912.83, 0.01));
+  // Propane : 1500 kg × 12,87 kWh × 0,1865 + abonnement 120.
+  assert.ok(approx(coutEnergieActuelle("propane", 1500), 3720.53, 0.5), coutEnergieActuelle("propane", 1500));
 });
 
-test("économies : cas réel 1600 L fioul (celui signalé comme trop optimiste)", () => {
-  // Chaleur utile issue de la voie A : chaudière fioul standard (0.83), 3 pers ECS.
+test("propane : conversion kg → kWh (PCI 12,87)", () => {
+  assert.ok(approx(consoEnKwh("propane", 1000), 12870, 0.01));
+  assert.equal(consoEnKwh("gaz", 15000), 15000);
+});
+
+test("économies : SCOP saisonnier réel dégradé par zone (aligné outil terrain)", () => {
+  // 3000 L fioul, chaudière standard, radiateurs fonte HT, zone H2 → SCOP réel ≈ 2,5.
   const r = calculerAmortissement({
-    eChaufKwh: 10480, // (16000 − 2800/0.83) × 0.83
-    eEcsKwh: 2800,
-    emetteurKey: "radiateurs_BT",
-    energieActuelle: "fioul",
-    consoReelle: 1600, // litres
-    typeChaudiereKey: "standard",
-    avecEcs: true,
-    prixCentral: 15000,
-    aidesTotales: 3000,
+    eChaufKwh: 22100, eEcsKwh: 2800, emetteurKey: "radiateurs_fonte_HT",
+    energieActuelle: "fioul", consoReelle: 3000, typeChaudiereKey: "standard",
+    avecEcs: true, zone: "H2", prixCentral: 16000, aidesTotales: 8095,
   });
-  // Facture actuelle : 1600 L × 1,41 = 2256 €/an.
+  // SCOP nominal 2,9 × 0,86 (H2) ≈ 2,5 comme le rapport PacCloser de référence.
+  assert.ok(approx(r.scop, 2.494, 0.01), `scop ${r.scop}`);
+  assert.ok(approx(r.coutActuel, 4230, 0.5), `coutActuel ${r.coutActuel}`);
+  // Économie ≈ 2 160 €/an (référence terrain : 2 188) — plus prudent qu'avant (2 424).
+  assert.ok(r.economieAn > 2050 && r.economieAn < 2280, `économie ${r.economieAn}`);
+  assert.ok(r.economieFioulNormalise < r.economieAn);
+});
+
+test("économies : cas 1600 L fioul (prudent, SCOP réel)", () => {
+  const r = calculerAmortissement({
+    eChaufKwh: 10480, eEcsKwh: 2800, emetteurKey: "radiateurs_BT",
+    energieActuelle: "fioul", consoReelle: 1600, typeChaudiereKey: "standard",
+    avecEcs: true, zone: "H2", prixCentral: 15000, aidesTotales: 3000,
+  });
   assert.ok(approx(r.coutActuel, 2256, 0.5), `coutActuel ${r.coutActuel}`);
-  // PAC : 10480/3.5 + 2800/2.5 = 4114 kWh élec × 0,194 + 80 € abo ≈ 878 €/an.
-  assert.ok(approx(r.coutFutur, 878.2, 1), `coutFutur ${r.coutFutur}`);
-  // Économie "tout compris" ≈ 1 348 €/an — et non ~2 300 € comme avant correction.
-  assert.ok(r.economieAn > 1300 && r.economieAn < 1400, `économie ${r.economieAn}`);
-  // Payback honnête : 12 000 / 1 348 ≈ 8,9 ans.
-  assert.ok(r.amortissementAns > 8 && r.amortissementAns < 10, `amort ${r.amortissementAns}`);
-  // Scénario prudent fioul à 1,15 €/L : économie plus basse mais positive.
-  assert.ok(r.economieFioulNormalise > 800 && r.economieFioulNormalise < r.economieAn);
-  // Chaudière standard (~15 ans) → remplacement forcé en année 5 dans la projection.
-  assert.equal(r.anRemplacement, 5);
+  // SCOP réel 3,5×0,86 ≈ 3,01 → économie ≈ 1 250 €/an (plus prudent que 1 348).
+  assert.ok(r.economieAn > 1150 && r.economieAn < 1330, `économie ${r.economieAn}`);
+  assert.ok(r.amortissementAns > 9 && r.amortissementAns < 11, `amort ${r.amortissementAns}`);
+  assert.equal(r.anRemplacement, 5); // chaudière standard (~15 ans)
 });
 
 test("reste à charge et amortissement en fourchette (comme le prix)", () => {

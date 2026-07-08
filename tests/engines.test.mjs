@@ -75,6 +75,24 @@ test("voie A (garde-fou PacCloser) : gaz standard avec correction PCI", () => {
   assert.ok(sansPci.pDeperditionKW > a.pDeperditionKW); // sans correction → +~10 %
 });
 
+test("voie A : l'ECS produite ou non par le chauffage change la déperdition", () => {
+  // Cas terrain : maison ~90 m², chaudière gaz condensation, ~10 000 kWh/an,
+  // zone H2c (Dordogne, dju 2000, T_base −5 °C).
+  const base = {
+    energie: "gaz", conso: 10034, typeChaudiereKey: "condensation",
+    dju: 2000, tExtBase: -5, tInt: 20,
+  };
+  // ECS sur le chauffage (3 occupants) → une partie de la conso part en eau chaude,
+  // la déperdition chauffage estimée baisse (~3 kW).
+  const avecEcs = deperditionsVoieA({ ...base, ecsUtileKwh: 1000 + 600 * 3 });
+  // ECS séparée (ballon élec) → toute la conso est du chauffage → ~4,3 kW,
+  // cohérent avec l'estimation terrain PacCloser.
+  const sansEcs = deperditionsVoieA({ ...base, ecsUtileKwh: 0 });
+  assert.ok(approx(avecEcs.pDeperditionKW, 3.0, 0.2), `avec ECS ${avecEcs.pDeperditionKW}`);
+  assert.ok(approx(sansEcs.pDeperditionKW, 4.33, 0.2), `sans ECS ${sansEcs.pDeperditionKW}`);
+  assert.ok(sansEcs.pDeperditionKW > avecEcs.pDeperditionKW);
+});
+
 test("setbackRatio : réduit sous 1 avec un réduit nocturne", () => {
   assert.equal(setbackRatio({}, 27), 1);
   const r = setbackRatio({ heuresNuit: 8, tempJour: 20, tempNuit: 18 }, 27);
